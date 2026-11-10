@@ -1,6 +1,7 @@
 // Developer notes for task 7, plus a jump list of every screen (Shift+D).
-import { html, Icon, cx } from './lib.js';
+import { html, Icon, cx, useState } from './lib.js';
 import { GENDER, setDemoGender } from './data.js';
+import { getKey, setKey } from './ai.js';
 
 export const JUMPS = [
   { id: 'opening', label: 'שלב 12: מסך פתיחה' },
@@ -21,7 +22,7 @@ const NOTES = [
     items: [
       'שלב 12 "חדר התרגול", הראשון בפרק "מגדילים מכירות". היום השלב נקרא "אימון מכירות".',
       'הבסיס: הסיסטם פרומפט של מאמן שיחות המכירה (practice-room/sales-coach-prompt.md), שמגיע מ-FlowBiz. המוק-אפ מראה איך כל חלק בפרומפט נראה בתוך השלב.',
-      'במוק-אפ אין מודל: לקוח מדומה פשוט מגיב לפי הכללים של סעיף 5.3, והמשוב נבנה ממה שקרה בשיחה. השיחה לדוגמה עם רונית והמשוב עליה כתובים מראש, כדי להראות משוב מלא.',
+      'עם מפתח API (למעלה בפאנל) השיחה, הרמז והמשוב רצים על Claude (claude-opus-5-5) עם הפרומפט המלא מ-doc/sales-coach-prompt.md. סעיף 9 בו מוחלף בבלוק ההקשר מהנתונים של המשתמש, וההוראה לכל קריאה מוסיפה את הדמות והמצב הנסתר שלה. הקוד ב-src/ai.js. בלי מפתח, src/coach.js משחק את הלקוח לפי כללים פשוטים, רק כדי שאפשר יהיה לעבור על המסכים. השיחה לדוגמה עם רונית והמשוב עליה כתובים מראש.',
     ],
   },
   {
@@ -84,7 +85,27 @@ const NOTES = [
   },
 ];
 
-export function DevPanel({ open, onClose, onJump, onReset }) {
+function KeyBox({ notify }) {
+  const [has, setHas] = useState(!!getKey());
+  const [val, setVal] = useState('');
+  const save = () => {
+    if (!val.trim()) return;
+    setKey(val);
+    setVal('');
+    setHas(true);
+    notify?.('המפתח נשמר. השיחה רצה עכשיו על המודל', 'sparkles');
+  };
+  return html`<section class="mb-4 rounded-xl border border-dashed border-brand-300 bg-brand-50/60 p-3">
+    <h3 class="mb-1 font-bold text-brand-900">המודל בשיחה</h3>
+    <p class="mb-2 flex items-center gap-1.5 text-[13px] font-bold ${has ? 'text-brand-600' : 'text-muted'}"><${Icon} name=${has ? 'sparkles' : 'cog'} size=${14} />${has ? 'Claude עם הפרומפט המלא' : 'בלי מפתח: לקוח מדומה לפי כללים'}</p>
+    ${has
+      ? html`<button type="button" class="text-[13px] font-bold text-brand-600 underline underline-offset-2 cursor-pointer" onClick=${() => (setKey(''), setHas(false))}>למחוק את המפתח מהדפדפן</button>`
+      : html`<div class="flex gap-1.5"><input type="password" autocomplete="off" dir="ltr" placeholder="sk-ant-..." value=${val} onInput=${(e) => setVal(e.target.value)} onKeyDown=${(e) => e.key === 'Enter' && save()} class="min-w-0 flex-1 rounded-lg border border-brand-200 bg-white px-2.5 py-1.5 text-[13px]" aria-label="מפתח Anthropic API" /><button type="button" class="rounded-lg bg-brand-600 px-3 text-[13px] font-bold text-white cursor-pointer" onClick=${save}>לשמור</button></div>`}
+    <p class="mt-2 text-[12px] text-muted">המפתח נשמר רק בדפדפן הזה ונשלח רק ל-Anthropic. כדאי מפתח נפרד עם תקרת הוצאה. במערכת עצמה הקריאה עוברת דרך השרת, והמשתמש לא רואה מפתח.</p>
+  </section>`;
+}
+
+export function DevPanel({ open, onClose, onJump, onReset, notify }) {
   return html`<aside
     class=${cx(
       'fixed inset-y-0 end-0 z-[70] flex w-full max-w-sm flex-col border-s border-slate-200 bg-white shadow-2xl transition-transform duration-200',
@@ -97,6 +118,7 @@ export function DevPanel({ open, onClose, onJump, onReset }) {
       <button type="button" onClick=${onClose} aria-label="סגירה" class="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 cursor-pointer"><${Icon} name="x" size=${18} /></button>
     </div>
     <div class="thin-scroll flex-1 overflow-y-auto p-4 text-[14px] leading-relaxed text-slate-700">
+      <${KeyBox} notify=${notify} />
       <section class="mb-4 rounded-xl border border-dashed border-brand-300 bg-brand-50/60 p-3">
         <h3 class="mb-2 font-bold text-brand-900">המשתמש לדוגמה</h3>
         <div class="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="המשתמש לדוגמה">

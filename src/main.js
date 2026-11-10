@@ -10,7 +10,9 @@
 import { html, render, useState, useEffect, useRef, Icon } from './lib.js';
 import { PartnerBubble, Progress, TopBar, BottomBar, Status, PrimaryButton, Button, Toast } from './components.js';
 import { STEP, PARTS, CLIENTS, SHEET, SHEET_FROM_SAMPLE, SAMPLE_CALL, SAMPLE_FEEDBACK, STAGE_DRILL, g } from './data.js';
-import { newCall, userSays, hintFor, feedbackFor } from './coach.js';
+import { newCall, userSays, hintFor, feedbackFor, talkRatio } from './coach.js';
+import * as ai from './ai.js';
+import { hasAI } from './ai.js';
 import { Opening, Room, ContextSheet, Brief, Done } from './step.js';
 import { Call, Feedback, StageDrill } from './call.js';
 import { Drill, Analysis } from './tools.js';
@@ -75,6 +77,7 @@ function App({ view: shellView, onViewChange }) {
   const [toast, setToast] = useState(null);
   const [dev, setDev] = useState(false);
   const [unread, setUnread] = useState(true);
+  const [busy, setBusy] = useState(null); // 'hint' | 'feedback' while the model works
   const timers = useRef({});
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -140,19 +143,55 @@ function App({ view: shellView, onViewChange }) {
   const call = state.calls.find((c) => c.id === route.callId);
   const client = CLIENTS.find((c) => c.id === (call?.clientId || route.clientId));
 
+  const endLine = (o) => (o === 'buy' ? (client.fem ? `${client.first} קנתה` : `${client.first} קנה`) : o === 'next' ? 'נקבע צעד הבא' : o === 'no' ? `${client.first} ${client.fem ? 'סירבה' : 'סירב'}` : `${client.first}: "צריך לחשוב על זה"`);
+  const aiError = (e) => {
+    console.error(e);
+    const s = e?.status;
+    return s === 401 ? 'המפתח לא תקין. בודקים אותו בהערות (Shift+D)' : s === 429 || s === 529 ? 'המודל עמוס כרגע. שולחים שוב בעוד רגע' : `המודל לא ענה (${e?.message || 'שגיאה'}). שולחים שוב`;
+  };
   const send = (text, done) => {
+    if (hasAI() && !stateRef.current.calls.find((c) => c.id === route.callId)?.sample) return sendAI(text, done);
     clearTimeout(timers.current.reply);
     timers.current.reply = setTimeout(() => {
       const cur = stateRef.current.calls.find((c) => c.id === route.callId);
       if (!cur) return done();
       const st = userSays(cur, text);
-      if (st.outcome) st.msgs = [...st.msgs, { who: 'end', text: st.outcome === 'buy' ? (client.fem ? `${client.first} קנתה` : `${client.first} קנה`) : st.outcome === 'next' ? 'נקבע צעד הבא' : `${client.first}: "צריך לחשוב על זה"` }];
+      if (st.outcome) st.msgs = [...st.msgs, { who: 'end', text: endLine(st.outcome) }];
       setCall(cur.id, st);
       done();
     }, 700 + Math.min(text.length * 6, 900));
   };
-  const hint = () => {
-    setCall(call.id, (c) => ({ msgs: [...c.msgs, { who: 'hint', text: hintFor(c) }], hints: c.hints + 1 }));
+  // With a key: the trainee's line shows at once, the client answers from Claude.
+  const sendAI = async (text, done) => {
+    const id = route.callId;
+    const prev = stateRef.current.calls.find((c) => c.id === id);
+    const msgs = [...prev.msgs.filter((m) => m.who !== 'note'), { who: 'me', text }];
+    setCall(id, { msgs, turns: prev.turns + 1 });
+    try {
+      const r = await ai.clientTurn({ ...prev, msgs });
+      setCall(id, (c) => ({
+        msgs: [...c.msgs, { who: 'client', text: r.reply }, ...(r.outcome ? [{ who: 'end', text: endLine(r.outcome) }] : [])],
+        reached: c.reached.includes(r.stage) ? c.reached : [...c.reached, r.stage],
+        outcome: r.outcome || c.outcome,
+        ai: true,
+      }));
+    } catch (e) {
+      setCall(id, (c) => ({ msgs: [...c.msgs, { who: 'note', text: aiError(e) }] }));
+    }
+    done();
+  };
+  const hint = async () => {
+    const id = call.id;
+    if (!hasAI() || call.sample) return setCall(id, (c) => ({ msgs: [...c.msgs, { who: 'hint', text: hintFor(c) }], hints: c.hints + 1 }));
+    if (busy) return;
+    setBusy('hint');
+    try {
+      const text = await ai.hint(stateRef.current.calls.find((c) => c.id === id));
+      setCall(id, (c) => ({ msgs: [...c.msgs, { who: 'hint', text }], hints: c.hints + 1 }));
+    } catch (e) {
+      setCall(id, (c) => ({ msgs: [...c.msgs, { who: 'note', text: aiError(e) }] }));
+    }
+    setBusy(null);
   };
   // "במוק-אפ: להריץ שיחה לדוגמה": plays the sample call into the open call.
   const playSample = () => {
@@ -171,9 +210,22 @@ function App({ view: shellView, onViewChange }) {
     const p = SHEET_FROM_SAMPLE.s1;
     setRow('s1', { answer: p.answer, short: p.short, src: p.src, mine: true });
   };
-  const finishCall = () => {
+  const finishCall = async () => {
     const cur = stateRef.current.calls.find((c) => c.id === route.callId);
-    const fb = cur.sample ? { ...SAMPLE_FEEDBACK, avg: sampleAvg() } : feedbackFor(cur);
+    if (busy) return;
+    let fb;
+    if (cur.sample) fb = { ...SAMPLE_FEEDBACK, avg: sampleAvg() };
+    else if (hasAI()) {
+      setBusy('feedback');
+      try {
+        fb = await ai.feedback(cur, talkRatio(cur.msgs));
+      } catch (e) {
+        setCall(cur.id, (c) => ({ msgs: [...c.msgs, { who: 'note', text: aiError(e) }] }));
+        setBusy(null);
+        return;
+      }
+      setBusy(null);
+    } else fb = feedbackFor(cur);
     setCall(cur.id, { feedback: fb, outcome: fb.outcome });
     if (cur.sample) {
       applySample();
@@ -233,7 +285,7 @@ function App({ view: shellView, onViewChange }) {
       back=${toRoom}
       extra=${call.msgs.length > 0 && html`<${Button} variant="text" onClick=${retry}><${Icon} name="rotate-ccw" size=${16} />לנסות שוב<//>`}
       status=${html`<${Status} reason=${myTurns === 0 ? 'עוד לא אמרת כלום' : null} hint=${call.outcome ? 'השיחה הסתיימה' : `${myTurns} ${myTurns === 1 ? 'הודעה' : 'הודעות'} שלך`} />`}
-      primary=${html`<${PrimaryButton} label=${call.outcome ? 'למשוב' : 'לסיים ולקבל משוב'} disabled=${myTurns === 0} onClick=${finishCall} />`}
+      primary=${html`<${PrimaryButton} label=${busy === 'feedback' ? 'הכריש כותב משוב...' : call.outcome ? 'למשוב' : 'לסיים ולקבל משוב'} disabled=${myTurns === 0 || !!busy} onClick=${finishCall} />`}
     />`,
     feedback: call && html`<${BottomBar}
       back=${toRoom}
@@ -262,7 +314,7 @@ function App({ view: shellView, onViewChange }) {
       onSheet=${() => go({ screen: 'sheet' })}
     />`,
     brief: client && html`<${Brief} client=${client} level=${level} setLevel=${setLevel} />`,
-    call: call && html`<${Call} key=${call.id} call=${call} onSend=${send} onHint=${hint} onSample=${playSample} />`,
+    call: call && html`<${Call} key=${call.id} call=${call} busy=${busy} onSend=${send} onHint=${hint} onSample=${playSample} />`,
     feedback: call?.feedback && html`<${Feedback} key=${call.id} call=${call} notify=${notify} onPractice=${(n) => go({ screen: 'stage', stageN: n, clientId: call.clientId, callId: call.id })} />`,
     stage: html`<${StageDrill} stageN=${route.stageN} clientId=${route.clientId} onDone=${() => (call?.feedback ? go({ screen: 'feedback', callId: route.callId }) : go({ screen: 'room' }))} />`,
     drill: html`<${Drill} sheet=${state.sheet} onFinish=${() => (patch({ drill: { done: (state.drill?.done || 0) + 1 } }), go({ screen: 'room' }))} />`,
@@ -281,7 +333,7 @@ function App({ view: shellView, onViewChange }) {
     ${bottom}
     <${Toast} toast=${toast} />
     ${ctxOpen && html`<${ContextSheet} onClose=${() => setCtxOpen(false)} />`}
-    <${DevPanel} open=${dev} onClose=${() => setDev(false)} onJump=${jump} onReset=${reset} />
+    <${DevPanel} open=${dev} onClose=${() => setDev(false)} onJump=${jump} onReset=${reset} notify=${notify} />
   </div>`;
 }
 

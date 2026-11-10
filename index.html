@@ -176,7 +176,7 @@
       // makes the browser always fetch the current modules.
       (function () {
         var v = Date.now(), imports = {};
-        ['call', 'coach', 'components', 'data', 'devnotes', 'lib', 'main', 'sheet', 'step', 'tools', 'ui', 'viewswitch'].forEach(function (m) {
+        ['ai', 'call', 'coach', 'components', 'data', 'devnotes', 'lib', 'main', 'sheet', 'step', 'tools', 'ui', 'viewswitch'].forEach(function (m) {
           var url = new URL('./src/' + m + '.js', location.href).href;
           imports[url] = url + '?v=' + v;
         });

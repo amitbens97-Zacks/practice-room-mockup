@@ -11,11 +11,14 @@ const R = (re) => (t) => re.test(t);
 const IS = {
   price: R(/₪|\b\d,?\d{3}\b|המחיר|מחיר של|עלות/),
   frame: R(/בסוף (השיחה|נחליט)|נחליט (יחד|ביחד)|כן או לא|מה יקרה בשיחה|בחצי השעה|ברבע השעה|איך השיחה תיראה/),
-  whyNow: R(/למה (דווקא )?עכשיו|מה גרם|מה הביא|דווקא עכשיו/),
-  numbers: R(/כמה (לקוחות|מטופלים|פניות|עבודות|מרוויח|הכנסה|עובדים)|במספרים|מחזור|הכנסה/),
-  tries: R(/ניסית|מה עשית עד|ניסיונות|מה כבר עשית/),
-  likes: R(/אהבת|מה עבד|מה לא עבד/),
-  motive: R(/מה ישתנה|למה (זה )?חשוב|מה יקרה אם|בעוד שנה|בשביל מה|למה דווקא/),
+  whyNow: R(/למה (דווקא )?עכשיו|מה גרם|מה הביא|דווקא עכשיו|השאר(ת|תה|ת־)? (לי )?(את ה)?פרטים|פני(ת|תה) אליי|הגע(ת|תה|תי) אליי|מה (גרם|הביא) לך/),
+  about: R(/(^|\s)ת?ספר(י|ו)? (לי )?(על|קצת|מה|איך)|^ת?ספר(י|ו)? לי[.!?]?$|על העסק|מה (את|אתה) עוש(ה|ים)|במה (את|אתה) עוס(ק|קת)|איך העסק|מה העסק|הכירי? לי|תציג(י)? את עצמך/),
+  small: R(/מה שלומך|מה נשמע|מה העניינים|איך (את|אתה) מרגיש|מה קורה איתך/),
+  turn: R(/^(תורך|תורך\.|אני מקשיב(ה)?|אני איתך|כן\??|נו|יאללה)$|(בוא|בואי|בואו) נתחיל|נתחיל\?|מעולה,? (בוא|בואי)/),
+  numbers: R(/כמה (לקוחות|מטופלים|מטופלות|פניות|עבודות|פרויקטים|מרוויח|מרוויחה|הכנסה|עובדים|עובדות)|במספרים|מחזור|הכנסה/),
+  tries: R(/ניסית|ניסיתם|מה עשית(ם)? עד|ניסיונות|מה כבר עשית|מה עשית בשביל/),
+  likes: R(/אהבת|מה עבד|מה לא עבד|מה היה טוב|מה היה חסר/),
+  motive: R(/מה ישתנה|למה (זה )?חשוב|מה יקרה אם|בעוד שנה|בשביל מה|למה דווקא|מה זה (ישנה|יאפשר)|מה (זה )?אומר (לך|עלייך|עליך)/),
   budget: R(/תקציב|כמה (את |אתה |אתם )?(מוכנ|משקיע|יכול)|כמה השקעת|כמה הולך היום/),
   decider: R(/מי עוד|(בן|בת) ה?זוג|שותף|אשתך|בעלך|לבד\?|מחליט(ה)? לבד|בבית/),
   time: R(/כמה זמן (יש|פנוי)|שעות פנויות|זמן פנוי|כמה שעות/),
@@ -47,6 +50,9 @@ const CLIENT_WORDS = {
 // The client's lines by what the user did. {u} = how the client addresses the user.
 const LINES = {
   ronit: {
+    about: ['קליניקה לפיזיותרפיה בקריית ביאליק. אני ועוד שתי מטפלות, שש שנים. רוב המטופלים הגיעו עד עכשיו מהמלצות.', 'מה עוד לספר... בעיקר אורתופדיה וספורטאים.'],
+    turn: ['(מחייכת) אני? חשבתי ש{you} {tell} לי.', 'כן, אני מקשיבה.'],
+    idle: ['כן?', 'לא בטוחה שהבנתי מה השאלה.', '(מחכה) ו...?'],
     hello: ['היי. עמוס היום, אבל יש לי חצי שעה.'],
     frame: ['כן, סבבה.'],
     whyNow: ['היה לי חודש חלש. ראיתי את הפוסט שלך על פרסום בלי אסטרטגיה, וזה דיבר אליי.', 'חודש חלש.'],
@@ -63,6 +69,9 @@ const LINES = {
     isolate: ['לא, זה העיקר. בכסף אני אסתדר.'],
   },
   avi: {
+    about: ['מיזוג אוויר. התקנות ותיקונים, אני ושלושה עובדים, בשרון. 15 שנה.', 'מה יש לספר. מזגנים.'],
+    turn: ['{you} {called} אליי. מה רצית לשאול?', 'כן, אני פה.'],
+    idle: ['כן, ו?', '{say} לי מה {want} לדעת.', '(מסתכל בשעון) יש לי עוד עשר דקות.'],
     hello: ['כן, אהלן. אני בין עבודה לעבודה, יש לי רבע שעה.'],
     frame: ['יאללה, בסדר.'],
     whyNow: ['החורף מגיע. בחורף אצלי מת.', 'החורף.'],
@@ -79,6 +88,9 @@ const LINES = {
     isolate: ['ומירב. היא צריכה להסכים.'],
   },
   michal: {
+    about: ['מעצבת פנים. אני ועוזרת. בעיקר שיפוצים קטנים: מטבח, חדר, פינה.', 'עיצוב פנים. ארבע שנים.'],
+    turn: ['אני רק רציתי לשמוע מה יש. {tellImp} {you2} קודם?', 'אוקיי, אני פה.'],
+    idle: ['אוקיי, ו?', 'לא הבנתי למה {you} {ask} את זה.', '(רושמת משהו) כן?'],
     hello: ['היי. רק רציתי לשמוע מה יש.'],
     frame: ['אוקיי.'],
     whyNow: ['קראתי את המדריך. טעות 3 זה בדיוק אני.', 'סקרנות.'],
@@ -96,14 +108,25 @@ const LINES = {
   },
 };
 
-const pick = (arr, i = 0) => arr[Math.min(i, arr.length - 1)];
+const pick = (arr, i = 0) => fill(arr[Math.min(i, arr.length - 1)]);
+// The client addresses the trainee by the trainee's gender.
+const fill = (t) =>
+  t
+    .replace('{you}', g('אתה', 'את'))
+    .replace('{you2}', g('אתה', 'את'))
+    .replace('{tell}', g('תספר', 'תספרי'))
+    .replace('{tellImp}', g('תספר', 'תספרי'))
+    .replace('{called}', g('פנית', 'פנית'))
+    .replace('{say}', g('תגיד', 'תגידי'))
+    .replace('{want}', g('אתה רוצה', 'את רוצה'))
+    .replace('{ask}', g('שואל', 'שואלת'));
 const you = (c) => g(c.fem ? 'אתה' : 'אתה', 'את');
 
 export function newCall(clientId, level = 2) {
   return { clientId, level, msgs: [], f: {}, reached: [], warm: 0, pending: false, resolved: false, outcome: null, hints: 0, turns: 0 };
 }
 
-const STAGE_OF = { hello: 1, frame: 2, whyNow: 3, numbers: 4, budget: 4, decider: 4, time: 4, success: 5, tries: 6, likes: 6, motive: 6, summary: 7, fault: 8, permission: 9, pitch: 9, threeQ: 10, price: 11, worryQ: 12, isolate: 12, loop: 12, close: 12, nextStep: 13 };
+const STAGE_OF = { hello: 1, turn: 1, about: 3, frame: 2, whyNow: 3, numbers: 4, budget: 4, decider: 4, time: 4, success: 5, tries: 6, likes: 6, motive: 6, summary: 7, fault: 8, permission: 9, pitch: 9, threeQ: 10, price: 11, worryQ: 12, isolate: 12, loop: 12, close: 12, nextStep: 13 };
 
 // One user message in, the client's reply out. Returns the new call state.
 export function userSays(call, text) {
@@ -246,6 +269,26 @@ export function userSays(call, text) {
     return st;
   }
 
+  // "ספרי לי על העסק": an open invitation gets the picture, then the story.
+  if (IS.about(text) && !IS.whyNow(text)) {
+    reach('about');
+    const seen = f.about ? 1 : 0;
+    f.about = f.about || text;
+    say(first ? `${pick(L.hello)} ${pick(L.about, seen)}` : pick(L.about, seen));
+    return st;
+  }
+  if (IS.small(text) && text.length < 60) {
+    reach('hello');
+    say(first ? `בסדר, תודה. ${pick(L.hello).replace(/^(היי|כן, אהלן)\.\s*/, '')}` : 'בסדר, תודה.');
+    return st;
+  }
+  if (IS.turn(text) && text.length < 40) {
+    reach('turn');
+    if (first) say(pick(L.hello));
+    else (f.turn = (f.turn || 0) + 1), say(pick(L.turn, f.turn - 1));
+    return st;
+  }
+
   // Discovery: a good open question opens one more layer; a shallow one gets little.
   const order = ['frame', 'whyNow', 'numbers', 'tries', 'likes', 'motive', 'budget', 'decider', 'time', 'success'];
   const hit = order.find((k) => IS[k](text));
@@ -278,7 +321,9 @@ export function userSays(call, text) {
     say(`לפני הכל, כמה זה עולה? ${g('תשלח', 'תשלחי')} לי משהו במייל.`);
     return st;
   }
-  say(IS.question(text) ? (st.level >= 3 ? 'תלוי.' : 'האמת שלא חשבתי על זה.') : 'אוקיי.');
+  // Nothing the client can hold on to: a short, in-character reply, never the same twice in a row.
+  f.idle = (f.idle || 0) + 1;
+  say(IS.question(text) ? (st.level >= 3 ? 'תלוי. במה בדיוק?' : 'האמת שלא חשבתי על זה. למה ' + g('אתה שואל', 'את שואלת') + '?') : pick(L.idle, (f.idle - 1) % L.idle.length));
   return st;
 }
 

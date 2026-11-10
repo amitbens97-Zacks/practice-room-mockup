@@ -18,6 +18,8 @@ function Bubble({ m, client }) {
     return html`<div class="rise mx-auto my-1 flex max-w-[460px] items-start gap-2 rounded-2xl border border-dashed border-brand-300 bg-brand-50 px-3 py-2 text-[14px]">
       <${SharkAvatar} size=${28} mood="thinking" /><span><b class="text-brand-600">רמז מהכריש · מחוץ לשיחה</b><br />${m.text}</span>
     </div>`;
+  if (m.who === 'note')
+    return html`<p class="rise mx-auto my-1 flex items-center gap-1.5 rounded-xl bg-warn-50 px-3 py-1.5 text-[13px] font-bold text-warn"><${Icon} name="triangle-alert" size=${14} />${m.text}</p>`;
   if (m.who === 'end')
     return html`<div class="rise mx-auto my-2 rounded-full bg-ink px-4 py-1.5 text-[13px] font-bold text-white">${m.text}</div>`;
   const me = m.who === 'me';
@@ -53,7 +55,7 @@ function Ratio({ msgs, client }) {
 }
 
 // ---------- the call ----------
-export function Call({ call, onSend, onHint, onSample }) {
+export function Call({ call, busy, onSend, onHint, onSample }) {
   const client = CLIENTS.find((c) => c.id === call.clientId);
   const [text, setText] = useState('');
   const [typing, setTyping] = useState(false);
@@ -93,7 +95,7 @@ export function Call({ call, onSend, onHint, onSample }) {
         ${typing && html`<div class="flex items-end gap-2"><${Avatar} client=${client} size=${30} /><span class="rounded-2xl rounded-es-sm border border-line bg-white px-3 py-2.5"><span class="inline-flex gap-1"><span class="pulse-dot h-1.5 w-1.5 rounded-full bg-muted"></span><span class="pulse-dot h-1.5 w-1.5 rounded-full bg-muted" style="animation-delay:.2s"></span><span class="pulse-dot h-1.5 w-1.5 rounded-full bg-muted" style="animation-delay:.4s"></span></span></span></div>`}
       </div>
       <div class="flex items-end gap-2 border-t border-line p-2.5">
-        <button type="button" class="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border-[1.5px] border-brand-300 bg-white px-3 text-[14px] font-bold text-brand-600 hover:bg-brand-50 disabled:opacity-40 cursor-pointer" disabled=${!!call.outcome} onClick=${onHint} title="הכריש יוצא מהשיחה לשורה: כיוון, בלי תשובה"><${Icon} name="lightbulb" size=${16} />רמז</button>
+        <button type="button" class="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border-[1.5px] border-brand-300 bg-white px-3 text-[14px] font-bold text-brand-600 hover:bg-brand-50 disabled:opacity-40 cursor-pointer" disabled=${!!call.outcome || typing || !!busy} onClick=${onHint} title="הכריש יוצא מהשיחה לשורה: כיוון, בלי תשובה"><${Icon} name="lightbulb" size=${16} />${busy === 'hint' ? 'חושב...' : 'רמז'}</button>
         <textarea
           ref=${input}
           rows="1"
