@@ -51,58 +51,46 @@ export function Opening() {
 }
 
 // ---------- the room: who do we practise with today ----------
+// One thing to do: pick a client. The recommended one is marked; the tools sit quietly below.
 export function Room({ state, onPick, onResume, onTool, onContext, onSheet }) {
   const lastByClient = (id) => [...state.calls].reverse().find((c) => c.clientId === id);
   const lastFix = [...state.calls].reverse().find((c) => c.feedback?.fix);
-  return html`<div class="mx-auto max-w-[1120px] px-4 py-5 md:px-8 md:py-6">
-    <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <p class="fb-eyebrow mb-1">חדר התרגול</p>
-        <h1 class="fb-h1 text-[26px] md:text-[32px]">עם מי <span class="fb-marker">מתאמנים</span> היום?</h1>
-        <p class="mt-1 max-w-[62ch] text-[16px]">כל לקוח נבנה מתיק הלקוח, מהסל ומההצעה שלך, ומביא דאגה אחרת. שיחה אחת מספיקה כדי לסיים את השלב.</p>
-      </div>
-      <button type="button" class="inline-flex items-center gap-1.5 text-[14px] font-bold text-brand-600 underline-offset-4 hover:underline cursor-pointer" onClick=${onContext}><${Icon} name="folder-open" size=${16} />מה הלקוחות יודעים על העסק</button>
-    </div>
-    ${lastFix && html`<${Note} tone="white" tilt=${-0.8} class="rise mb-4 flex max-w-[760px] items-start gap-3 !p-3">
+  const doneIds = new Set(state.calls.filter((c) => c.feedback).map((c) => c.clientId));
+  const next = CLIENTS.find((c) => !doneIds.has(c.id))?.id;
+  return html`<div class="mx-auto max-w-[980px] px-4 py-6 md:px-8 md:py-8">
+    <h1 class="fb-h1 mb-1 text-[28px] md:text-[34px]">עם מי <span class="fb-marker">מתאמנים</span> היום?</h1>
+    <p class="mb-6 text-[17px] text-muted">${g('בחר', 'בחרי')} לקוח. שיחה אחת עם משוב מספיקה כדי לסיים את השלב.</p>
+    ${lastFix && html`<button type="button" class="rise mb-5 flex w-full max-w-[640px] items-center gap-3 rounded-2xl border-[1.5px] border-brand-300 bg-brand-50 p-3 text-start hover:border-brand-600 cursor-pointer" onClick=${() => onResume(lastFix)}>
       <${SharkAvatar} size=${36} />
-      <span class="min-w-0 flex-1 text-[15px]"><span class="fb-note-kicker">מהפעם הקודמת</span><b class="block">${lastFix.feedback.fix.title.split(':')[0]}</b>אפשר להמשיך בדיוק מהתיקון הזה, עם ${CLIENTS.find((c) => c.id === lastFix.clientId).first}.</span>
-      <${Button} variant="mini" onClick=${() => onResume(lastFix)}>להמשיך מכאן<//>
-    <//>`}
-    <div class="grid gap-3 md:grid-cols-3">
+      <span class="min-w-0 flex-1"><small class="block text-[13px] font-bold text-brand-600">להמשיך מהפעם הקודמת</small><b class="block text-[16px]">${lastFix.feedback.fix.title.split(':')[0]}</b></span>
+      <${Icon} name="arrow-left" size=${18} class="text-brand-600" />
+    </button>`}
+    <div class="grid gap-4 md:grid-cols-3">
       ${CLIENTS.map((c) => {
         const last = lastByClient(c.id);
         const form = formOf(c.form);
-        return html`<button key=${c.id} type="button" class="fb-panel group flex flex-col !p-4 text-start transition-colors hover:border-brand-300 cursor-pointer" onClick=${() => onPick(c.id)}>
-          <span class="mb-2 flex items-center gap-3">
-            <${Avatar} client=${c} />
-            <span class="min-w-0"><b class="block font-display text-[18px]">${c.name}</b><small class="block truncate text-[13px] text-muted">${c.who}</small></span>
-          </span>
-          <span class="mb-2 text-[14px] text-muted"><${Icon} name="map-pin" size=${14} class="me-1 text-brand-600" />${c.from}</span>
-          <span class="mb-3 rounded-xl bg-canvas px-3 py-2 text-[15px]">"${c.said}"</span>
-          <span class="mt-auto flex flex-wrap items-center gap-1.5">
-            <${Tag} tone="blue"><${Icon} name=${form.icon} size=${13} />${form.label} · ${c.tag}<//>
-            <span class="text-[12px] text-muted">${c.tagFrom}</span>
-          </span>
-          <span class="mt-3 flex items-center justify-between border-t border-line pt-2.5 text-[14px]">
-            ${last ? html`<span class="text-muted">${last.feedback ? `${outcomeLabel(last.outcome, c)} · ${last.feedback.avg.toFixed(1)}` : 'באמצע שיחה'}</span>` : html`<span class="text-faint">עוד לא דיברתם</span>`}
-            <span class="inline-flex items-center gap-1 font-bold text-brand-600">${last ? 'עוד שיחה' : 'לשיחה'}<${Icon} name="arrow-left" size=${16} /></span>
+        const rec = c.id === next && !lastFix;
+        return html`<button key=${c.id} type="button" class=${cx('fb-panel group relative flex flex-col items-center !p-5 text-center transition hover:-translate-y-0.5 hover:border-brand-600 cursor-pointer', rec && '!border-brand-600 ring-4 ring-brand-100')} onClick=${() => onPick(c.id)}>
+          ${rec && html`<span class="absolute -top-3 rounded-full bg-brand-600 px-3 py-0.5 text-[12px] font-bold text-white">מומלץ להתחיל</span>`}
+          <${Avatar} client=${c} size=${64} />
+          <b class="mt-3 block font-display text-[20px]">${c.first}</b>
+          <small class="mb-3 block text-[14px] text-muted">${c.who}</small>
+          <span class="mb-4 text-[15px] italic text-ink">"${c.said}"</span>
+          <span class="mt-auto flex w-full items-center justify-between border-t border-line pt-3 text-[14px]">
+            <span class="inline-flex items-center gap-1 text-muted"><${Icon} name=${form.icon} size=${14} />${last?.feedback ? `${outcomeLabel(last.outcome, c)} · ${last.feedback.avg.toFixed(1)}` : `דאגה: ${form.label}`}</span>
+            <span class="inline-flex items-center gap-1 font-bold text-brand-600">${last ? 'עוד שיחה' : 'לשיחה'}<${Icon} name="arrow-left" size=${16} class="transition group-hover:-translate-x-0.5" /></span>
           </span>
         </button>`;
       })}
     </div>
-    <div class="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_0.8fr]">
-      <button type="button" class="fb-panel flex items-center gap-3 !p-4 text-start hover:border-brand-300 cursor-pointer" onClick=${() => onTool('drill')}>
-        <span class="fb-chip-ic h-11 w-11 shrink-0"><${Icon} name="zap" size=${22} /></span>
-        <span class="min-w-0"><b class="block text-[16px]">סבב התנגדויות מהיר</b><small class="block text-[14px] text-muted">5 התנגדויות, ותשובה לדוגמה אחרי כל אחת${state.drill?.done ? ` · ${state.drill.done === 1 ? 'עשית סבב אחד' : `עשית ${state.drill.done} סבבים`}` : ''}</small></span>
-      </button>
-      <button type="button" class="fb-panel flex items-center gap-3 !p-4 text-start hover:border-brand-300 cursor-pointer" onClick=${() => onTool('analysis')}>
-        <span class="fb-chip-ic h-11 w-11 shrink-0"><${Icon} name="file-search" size=${22} /></span>
-        <span class="min-w-0"><b class="block text-[16px]">ניתוח שיחה שהייתה</b><small class="block text-[14px] text-muted">מדביקים תמלול או סיכום, ורואים איפה היא נסגרה או נפלה</small></span>
-      </button>
-      <button type="button" class="fb-panel flex items-center gap-3 !p-4 text-start hover:border-brand-300 cursor-pointer" onClick=${onSheet}>
-        <span class="fb-chip-ic h-11 w-11 shrink-0"><${Icon} name="file-text" size=${22} /></span>
-        <span class="min-w-0"><b class="block text-[16px]">דף התשובות</b><small class="block text-[14px] text-muted">${state.sheet.length} התנגדויות${state.sheet.some((r) => r.mine) ? ', חלקן במילים שלך' : ''}</small></span>
-      </button>
+    <div class="mt-8 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+      <span class="me-1 text-[14px] font-bold text-muted">עוד בחדר:</span>
+      ${[
+        ['zap', 'סבב התנגדויות מהיר', () => onTool('drill')],
+        ['file-search', 'ניתוח שיחה שהייתה', () => onTool('analysis')],
+        ['file-text', 'דף התשובות', onSheet],
+        ['folder-open', 'מה הלקוחות יודעים', onContext],
+      ].map(([icon, label, fn]) => html`<button key=${label} type="button" class="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-white px-3.5 text-[14px] font-semibold hover:border-brand-300 hover:text-brand-600 cursor-pointer" onClick=${fn}><${Icon} name=${icon} size=${15} />${label}</button>`)}
     </div>
   </div>`;
 }
@@ -124,44 +112,30 @@ export function ContextSheet({ onClose }) {
 }
 
 // ---------- the brief before a call ----------
+// Who, what they wrote, the goal, and how hard. The call structure shows live in the call.
 export function Brief({ client, level, setLevel }) {
-  const form = formOf(client.form);
-  return html`<div class="mx-auto grid max-w-[1080px] gap-6 px-4 py-5 md:grid-cols-[1.15fr_0.85fr] md:px-8 md:py-7">
-    <div>
-      <p class="fb-eyebrow mb-1">לפני השיחה</p>
-      <div class="mb-4 flex items-center gap-3">
-        <${Avatar} client=${client} size=${56} />
-        <div><h1 class="fb-h1 text-[28px] md:text-[32px]">${client.name}</h1><p class="text-[16px] text-muted">${client.who}</p></div>
-      </div>
-      <section class="fb-panel mb-4 !p-4">
-        <p class="mb-1 text-[14px] font-bold text-muted">מה ידוע לך</p>
-        <p class="mb-1 text-[16px]"><${Icon} name="map-pin" size=${15} class="me-1 text-brand-600" />${client.from}</p>
-        <p class="text-[16px]"><${Icon} name="message-circle" size=${15} class="me-1 text-brand-600" />${client.fem ? 'כתבה' : 'כתב'}: "${client.said}"</p>
-        <p class="mt-3 border-t border-line pt-2 text-[14px] text-muted">בשיחה אמיתית: תזכורת אישית לפני, שאלה או שתיים על הבעיה, ובדיקה שכל מי שמחליט יהיה בשיחה.</p>
-      </section>
-      <p class="mb-1.5 text-[14px] font-bold">רמת קושי</p>
-      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="רמת קושי">
-        ${LEVELS.map(
-          (l) => html`<button key=${l.id} type="button" role="radio" aria-checked=${level === l.id} onClick=${() => setLevel(l.id)} class=${cx('rounded-xl border-[1.5px] px-3 py-2 text-start cursor-pointer', level === l.id ? 'border-brand-600 bg-brand-100' : 'border-line bg-white hover:border-brand-300')}>
-            <b class=${cx('block text-[14px]', level === l.id && 'text-brand-600')}>${l.label}</b><small class="block text-[12px] leading-snug text-muted">${l.sub}</small>
-          </button>`,
-        )}
-      </div>
+  const L = LEVELS.find((l) => l.id === level);
+  return html`<div class="mx-auto max-w-[620px] px-4 py-6 md:py-10">
+    <div class="mb-5 flex flex-col items-center text-center">
+      <${Avatar} client=${client} size=${72} />
+      <h1 class="fb-h1 mt-3 text-[28px] md:text-[32px]">${client.name}</h1>
+      <p class="text-[16px] text-muted">${client.who}</p>
     </div>
-    <div class="flex flex-col gap-3">
-      <${Note} tone="white" tilt=${-1} class="!p-4">
-        <span class="fb-note-kicker">המטרה של השיחה</span>
-        <b class="block text-[17px]">החלטה ברורה, וצעד הבא ביומן</b>
-        <span class="text-[15px]">גם "לא" הוגן הוא תוצאה טובה. מה שלא נחשב הצלחה: "צריך לחשוב על זה".</span>
-      <//>
-      <section class="fb-panel !p-4">
-        <p class="mb-2 text-[14px] font-bold text-muted">מבנה השיחה</p>
-        <ol class="flex flex-col gap-1.5">
-          ${GROUPS.map((gr, i) => html`<li key=${gr} class="flex items-start gap-2 text-[15px]"><span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-100 text-[12px] font-bold text-brand-600">${i + 1}</span><span><b>${gr}</b> <small class="text-muted">${STAGES.filter((s) => s.group === i).map((s) => s.name).join(' · ')}</small></span></li>`)}
-        </ol>
-      </section>
-      <p class="flex items-center gap-2 text-[14px] text-muted"><${Icon} name=${form.icon} size=${15} class="text-brand-600" />הדאגה של ${client.first} תעלה אם לא תצא לפני המחיר.</p>
+    <section class="fb-panel mb-4 !p-4">
+      <p class="mb-1 text-[13px] font-bold text-muted">${client.from}</p>
+      <p class="text-[17px]">${client.fem ? 'כתבה' : 'כתב'}: <b>"${client.said}"</b></p>
+    </section>
+    <section class="mb-6 flex items-start gap-3 rounded-2xl bg-brand-50 p-4">
+      <span class="fb-chip-ic h-9 w-9 shrink-0"><${Icon} name="target" size=${18} /></span>
+      <span><b class="block text-[16px]">המטרה: החלטה ברורה, וצעד הבא ביומן</b><span class="text-[15px] text-muted">גם "לא" הוגן נחשב. "צריך לחשוב" לא.</span></span>
+    </section>
+    <p class="mb-2 text-[14px] font-bold">רמת קושי</p>
+    <div class="grid grid-cols-4 gap-1 rounded-2xl bg-canvas p-1 ring-1 ring-line" role="radiogroup" aria-label="רמת קושי">
+      ${LEVELS.map(
+        (l) => html`<button key=${l.id} type="button" role="radio" aria-checked=${level === l.id} onClick=${() => setLevel(l.id)} class=${cx('rounded-xl px-2 py-2 text-[14px] font-bold transition cursor-pointer', level === l.id ? 'bg-white text-brand-600 shadow-sm ring-1 ring-brand-300' : 'text-muted hover:text-ink')}>${l.label.split(' · ')[1]}</button>`,
+      )}
     </div>
+    <p class="mt-2 text-center text-[14px] text-muted">${L.sub}</p>
   </div>`;
 }
 

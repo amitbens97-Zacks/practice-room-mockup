@@ -29,16 +29,31 @@ function Bubble({ m, client }) {
   </div>`;
 }
 
-export function Strip({ reached, vertical }) {
+// What to aim for in each part of the call: one line, so the user always knows what's next.
+const NEXT = (c) => [
+  'פותחים באדם, ואומרים מה יקרה בשיחה ושבסוף מחליטים.',
+  `שואלים למה עכשיו, מה כבר ${c.fem ? 'ניסתה' : 'ניסה'}, ומה ישתנה. ${c.first} ${c.fem ? 'מדברת' : 'מדבר'}, ${g('אתה מקשיב', 'את מקשיבה')}.`,
+  `מסכמים במילים של ${c.first}, עד ש${c.fem ? 'תגיד' : 'יגיד'} "נכון, בדיוק".`,
+  'מבקשים רשות, ומציגים קצר. כל משפט מחובר למה שנאמר.',
+  'אומרים את המחיר ושותקים. התנגדות? קודם שואלים מה מדאיג.',
+  'קובעים מועד ביומן. "נדבר" זה לא צעד הבא.',
+];
+const groupNow = (reached) => {
   const max = reached.length ? Math.max(...reached) : -1;
-  const now = max >= 0 ? STAGES.find((s) => s.n === max).group : 0;
-  return html`<ol class=${cx('flex gap-1.5', vertical ? 'flex-col' : 'flex-wrap')} aria-label="שלבי השיחה">
+  const gr = max >= 0 ? STAGES.find((s) => s.n === max).group : 0;
+  const full = STAGES.filter((s) => s.group === gr).every((s) => reached.includes(s.n));
+  return full ? Math.min(gr + 1, GROUPS.length - 1) : gr;
+};
+
+// The six parts of the call as one slim bar.
+export function Strip({ reached }) {
+  const now = groupNow(reached);
+  return html`<ol class="grid grid-cols-6 gap-1" aria-label="שלבי השיחה">
     ${GROUPS.map((gr, i) => {
-      const stages = STAGES.filter((s) => s.group === i);
-      const hit = stages.filter((s) => reached.includes(s.n)).length;
-      const state = hit === stages.length ? 'done' : i === now ? 'now' : hit ? 'part' : 'todo';
-      return html`<li key=${gr} class=${cx('flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[13px] font-bold', state === 'now' ? 'bg-brand-100 text-brand-600' : state === 'done' ? 'text-ink' : state === 'part' ? 'text-ink' : 'text-faint')} title=${stages.map((s) => s.name).join(' · ')}>
-        <span class=${cx('grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px]', state === 'done' ? 'bg-brand-600 text-white' : state === 'now' ? 'bg-white text-brand-600 ring-2 ring-brand-600' : state === 'part' ? 'bg-brand-200 text-brand-600' : 'bg-canvas ring-1 ring-line')}>${state === 'done' ? '✓' : i + 1}</span>${gr}
+      const state = i < now ? 'done' : i === now ? 'now' : 'todo';
+      return html`<li key=${gr} class="min-w-0" aria-current=${state === 'now' ? 'step' : null}>
+        <span class=${cx('block h-1.5 rounded-full transition-colors', state === 'done' ? 'bg-brand-600' : state === 'now' ? 'bg-brand-300' : 'bg-line')}></span>
+        <span class=${cx('mt-1 hidden truncate text-[12px] sm:block', state === 'now' ? 'font-bold text-brand-600' : state === 'done' ? 'text-ink' : 'text-faint')}>${gr}</span>
       </li>`;
     })}
   </ol>`;
@@ -46,12 +61,9 @@ export function Strip({ reached, vertical }) {
 
 function Ratio({ msgs, client }) {
   const r = talkRatio(msgs);
+  if (msgs.filter((m) => m.who === 'me').length < 2) return null;
   const ok = r >= 60;
-  return html`<div>
-    <p class="mb-1 flex justify-between text-[13px] font-bold"><span>מי מדבר יותר</span><span class=${ok ? 'text-brand-600' : 'text-warn'}>${client.first} ${r}%</span></p>
-    <div class="h-2.5 overflow-hidden rounded-full bg-canvas ring-1 ring-line"><div class="h-full rounded-full bg-brand-300 transition-all" style=${{ width: `${r}%` }}></div></div>
-    <p class="mt-1 text-[12px] text-muted">הלקוח צריך לדבר לפחות פי שניים ממך.</p>
-  </div>`;
+  return html`<span class=${cx('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold', ok ? 'bg-brand-50 text-brand-600' : 'bg-warn-50 text-warn')} title="הלקוח צריך לדבר לפחות פי שניים ממך"><${Icon} name="mic" size=${12} />${client.first} ${r}%</span>`;
 }
 
 // ---------- the call ----------
@@ -73,22 +85,24 @@ export function Call({ call, busy, onSend, onHint, onSample }) {
     onSend(t, () => setTyping(false));
   };
   const level = LEVELS.find((l) => l.id === call.level);
-  return html`<div class="mx-auto grid h-full max-w-[1120px] gap-4 px-3 py-3 md:grid-cols-[260px_1fr] md:px-8 md:py-4">
-    <aside class="hidden min-h-0 flex-col gap-3 overflow-y-auto md:flex">
-      <section class="fb-panel !p-3">
-        <div class="mb-1 flex items-center gap-2"><${Avatar} client=${client} size=${38} /><span class="min-w-0"><b class="block text-[15px]">${client.name}</b><small class="block truncate text-[12px] text-muted">${client.who}</small></span></div>
-        <p class="text-[12px] text-muted">רמה ${level.label}</p>
-      </section>
-      <section class="fb-panel !p-3"><p class="mb-1.5 text-[13px] font-bold text-muted">איפה השיחה</p><${Strip} reached=${call.reached} vertical /></section>
-      <section class="fb-panel !p-3"><${Ratio} msgs=${call.msgs} client=${client} /></section>
-    </aside>
-    <section class="flex min-h-0 flex-col overflow-hidden rounded-[18px] border border-line bg-surface">
-      <div class="flex items-center gap-2 border-b border-line px-3 py-2 md:hidden"><${Avatar} client=${client} size=${30} /><b class="text-[15px]">${client.name}</b><span class="ms-auto text-[12px] text-muted">רמה ${call.level}</span></div>
+  const now = groupNow(call.reached);
+  return html`<div class="mx-auto flex h-full max-w-[860px] flex-col px-3 py-3 md:px-6 md:py-4">
+    <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] border border-line bg-surface">
+      <div class="border-b border-line px-4 pb-3 pt-3">
+        <div class="mb-3 flex items-center gap-2.5">
+          <${Avatar} client=${client} size=${36} />
+          <span class="min-w-0"><b class="block text-[16px] leading-tight">${client.name}</b><small class="text-[12px] text-muted">רמה ${level.label}</small></span>
+          <span class="ms-auto"><${Ratio} msgs=${call.msgs} client=${client} /></span>
+        </div>
+        <${Strip} reached=${call.reached} />
+        ${!call.outcome && html`<p key=${now} class="rise mt-2.5 flex items-start gap-1.5 text-[14px]"><${Icon} name="compass" size=${15} class="mt-0.5 shrink-0 text-brand-600" /><span><b>עכשיו:</b> ${NEXT(client)[now]}</span></p>`}
+      </div>
       <div ref=${scroll} class="thin-scroll flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3 md:p-4">
         ${!call.msgs.length &&
-        html`<div class="m-auto max-w-[380px] text-center">
-          <p class="mb-1 font-display text-[18px] font-bold">${client.first} ${client.fem ? 'מחכה' : 'מחכה'} בזום</p>
-          <p class="mb-3 text-[15px] text-muted">${g('אתה פותח', 'את פותחת')} את השיחה. ${client.fem ? 'היא' : 'הוא'} ${client.fem ? 'תענה' : 'יענה'} כמו לקוח${client.fem ? 'ה' : ''} ${client.fem ? 'אמיתית' : 'אמיתי'}: לשאלה שטחית, תשובה שטחית.</p>
+        html`<div class="m-auto flex max-w-[380px] flex-col items-center text-center">
+          <${Avatar} client=${client} size=${56} />
+          <p class="mb-1 mt-3 font-display text-[19px] font-bold">${client.first} ${client.fem ? 'מחכה' : 'מחכה'} בזום</p>
+          <p class="mb-4 text-[15px] text-muted">${g('אתה פותח', 'את פותחת')}. לשאלה שטחית, תשובה שטחית.</p>
           ${client.id === 'ronit' && html`<button type="button" class="rounded-xl border-[1.5px] border-dashed border-brand-300 px-3 py-1.5 text-[13px] font-bold text-brand-600 hover:bg-brand-50 cursor-pointer" onClick=${onSample}>במוק-אפ: להריץ שיחה לדוגמה</button>`}
         </div>`}
         ${call.msgs.map((m, i) => html`<${Bubble} key=${i} m=${m} client=${client} />`)}
@@ -135,6 +149,8 @@ export function Feedback({ call, onPractice, notify }) {
   const client = CLIENTS.find((c) => c.id === call.clientId);
   const [tab, setTab] = useState('fb');
   const [explain, setExplain] = useState(false);
+  const [why, setWhy] = useState(false);
+  const [more, setMore] = useState(false);
   const real = fb.scores.filter((s) => s[1] != null);
   const avg = fb.avg ?? real.reduce((s, x) => s + x[1], 0) / real.length;
   const weakest = real.reduce((a, b) => (b[1] < a[1] ? b : a), real[0]);
@@ -150,53 +166,57 @@ export function Feedback({ call, onPractice, notify }) {
     ['condition', 'מה היה גורם לה/לו להגיד כן'.replace('לה/לו', client.fem ? 'לה' : 'לו'), H.condition],
   ];
   const tabs = [
-    ['fb', 'המשוב'],
+    ['fb', 'העיקר'],
     ['scores', 'הציונים'],
     ['hidden', `מה היה בראש של ${client.first}`],
     ['map', 'מפת השיחה'],
   ];
-  return html`<div class="mx-auto max-w-[1120px] px-4 py-4 md:px-8 md:py-5">
-    <div class="mb-3 flex flex-wrap items-start gap-3">
-      <${Avatar} client=${client} size=${46} />
+  return html`<div class="mx-auto max-w-[820px] px-4 py-5 md:px-8 md:py-7">
+    <div class="mb-4 flex items-start gap-4">
       <div class="min-w-0 flex-1">
-        <p class="mb-1 flex flex-wrap items-center gap-2"><span class="fb-eyebrow">המשוב · ${client.name}</span><${Tag} tone=${o.tone}><${Icon} name=${o.icon} size=${13} />${outcomeLabel(fb.outcome, client)}<//><span class="text-[13px] text-muted">ממוצע ${avg.toFixed(1)} · רמה ${call.level}</span></p>
-        <p class="max-w-[80ch] text-[17px] font-semibold leading-snug">${fb.line}</p>
+        <p class="mb-1.5 flex flex-wrap items-center gap-2"><${Avatar} client=${client} size=${28} /><span class="text-[14px] font-bold text-muted">השיחה עם ${client.first}</span><${Tag} tone=${o.tone}><${Icon} name=${o.icon} size=${13} />${outcomeLabel(fb.outcome, client)}<//></p>
+        <p class="text-[19px] font-semibold leading-snug md:text-[21px]">${fb.line}</p>
       </div>
+      <div class="shrink-0 rounded-2xl bg-brand-50 px-4 py-2 text-center"><b class="block font-display text-[30px] leading-none text-brand-600">${avg.toFixed(1)}</b><small class="text-[12px] text-muted">מתוך 5</small></div>
     </div>
-    <div class="mb-3 flex gap-1 overflow-x-auto border-b border-line no-scrollbar" role="tablist">
+    <div class="mb-5 flex gap-1 overflow-x-auto border-b border-line no-scrollbar" role="tablist">
       ${tabs.map(([id, label]) => html`<button key=${id} type="button" role="tab" aria-selected=${tab === id} onClick=${() => setTab(id)} class=${cx('-mb-px whitespace-nowrap border-b-[3px] px-3 py-2 text-[15px] font-bold cursor-pointer', tab === id ? 'border-brand-600 text-brand-600' : 'border-transparent text-muted hover:text-ink')}>${label}</button>`)}
     </div>
 
     ${tab === 'fb' &&
-    html`<div class="grid gap-4 md:grid-cols-[1fr_1.1fr]">
-      <div class="flex flex-col gap-3">
-        <section>
-          <h2 class="fb-h3 mb-2">מה עבד</h2>
-          ${fb.worked.length ? fb.worked.map((w, i) => html`<div key=${i} class="fb-panel mb-2 !p-3"><p class="mb-1 text-[15px] font-bold">"${w.quote}"</p><p class="text-[14px] text-muted">${w.did}</p></div>`) : html`<p class="text-[15px] text-muted">השיחה קצרה מדי כדי להצביע על משהו מדויק.</p>`}
-        </section>
-        ${fb.more.length > 0 && html`<section><h2 class="fb-h3 mb-1.5">עוד דברים לשים לב</h2><ul class="list-disc space-y-1 ps-5 text-[15px]">${fb.more.map((m) => html`<li key=${m}>${m}</li>`)}</ul><p class="mt-1 text-[13px] text-muted">לתרגול הבא, לא לעכשיו.</p></section>`}
-        ${fb.flags.length > 0 && html`<${Note} tone="error" tilt=${0} class="!p-3"><span class="fb-note-kicker">דגלים אדומים</span>${fb.flags.map((f) => html`<p key=${f} class="text-[15px]">${f}</p>`)}<//>`}
-      </div>
+    html`<div class="flex flex-col gap-4">
       ${fb.fix &&
-      html`<div class="flex flex-col gap-3">
-        <${Note} tone="white" tilt=${-0.6} class="!p-4">
-          <span class="fb-note-kicker">התיקון האחד</span>
-          <b class="mb-2 block font-display text-[19px]">${fb.fix.title}</b>
-          <p class="mb-1 text-[14px] font-bold text-muted">מה קרה</p>
-          <p class="mb-2 rounded-lg bg-canvas px-3 py-2 text-[15px]">"${fb.fix.what}"</p>
-          <p class="mb-1 text-[14px] font-bold text-muted">מה זה עשה ל${client.first}</p>
-          <p class="mb-2 text-[15px]">${fb.fix.effect}</p>
-          <p class="mb-1 flex items-center justify-between text-[14px] font-bold text-muted">העיקרון${EXPLAIN[fb.fix.stageN] && html`<button type="button" class="text-[13px] text-brand-600 underline underline-offset-2 cursor-pointer" onClick=${() => setExplain(true)}>להסבר קצר</button>`}</p>
-          <p class="mb-2 text-[15px]">${fb.fix.principle}</p>
-          <p class="mb-1 text-[14px] font-bold text-muted">לומר בפעם הבאה</p>
-          <p class="rounded-lg border-[1.5px] border-brand-200 bg-brand-50 px-3 py-2 text-[15px] font-semibold">${fb.fix.alt}</p>
-          <button type="button" class="mt-1.5 inline-flex items-center gap-1 text-[13px] font-bold text-brand-600 cursor-pointer" onClick=${() => notify('הניסוח הועתק', 'copy')}><${Icon} name="copy" size=${14} />העתקה</button>
-        <//>
-        <section class="fb-panel flex items-center gap-3 !p-3">
-          <span class="fb-chip-ic h-10 w-10 shrink-0"><${Icon} name="repeat" size=${20} /></span>
-          <span class="min-w-0 flex-1"><b class="block text-[14px] text-muted">התרגיל הבא</b><span class="text-[15px]">${fb.next.text}</span></span>
-          <${Button} variant="mini" onClick=${() => onPractice(fb.next.stageN)}>לתרגל עכשיו<//>
-        </section>
+      html`<${Note} tone="white" tilt=${-0.4} class="!p-5">
+        <span class="fb-note-kicker">התיקון האחד</span>
+        <b class="mb-3 block font-display text-[21px] leading-snug">${fb.fix.title}</b>
+        <p class="mb-1 text-[13px] font-bold text-muted">לומר בפעם הבאה</p>
+        <p class="rounded-xl border-[1.5px] border-brand-200 bg-brand-50 px-3.5 py-2.5 text-[16px] font-semibold leading-relaxed">${fb.fix.alt}</p>
+        <div class="mt-2 flex flex-wrap items-center gap-4">
+          <button type="button" class="inline-flex items-center gap-1 text-[14px] font-bold text-brand-600 cursor-pointer" onClick=${() => notify('הניסוח הועתק', 'copy')}><${Icon} name="copy" size=${14} />העתקה</button>
+          <button type="button" aria-expanded=${why} class="inline-flex items-center gap-1 text-[14px] font-bold text-muted hover:text-ink cursor-pointer" onClick=${() => setWhy(!why)}><${Icon} name=${why ? 'chevron-up' : 'chevron-down'} size=${15} />למה דווקא זה</button>
+        </div>
+        ${why && html`<div class="rise mt-3 flex flex-col gap-2.5 border-t border-line pt-3 text-[15px]">
+          <p><b class="block text-[13px] text-muted">מה קרה</b>"${fb.fix.what}"</p>
+          <p><b class="block text-[13px] text-muted">מה זה עשה ל${client.first}</b>${fb.fix.effect}</p>
+          <p><b class="block text-[13px] text-muted">העיקרון</b>${fb.fix.principle}${EXPLAIN[fb.fix.stageN] && html` <button type="button" class="text-[13px] font-bold text-brand-600 underline underline-offset-2 cursor-pointer" onClick=${() => setExplain(true)}>להסבר קצר</button>`}</p>
+        </div>`}
+      <//>`}
+      <section class="flex items-center gap-3 rounded-2xl bg-brand-600 p-4 text-white">
+        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15"><${Icon} name="repeat" size=${20} /></span>
+        <span class="min-w-0 flex-1"><b class="block text-[13px] opacity-80">התרגיל הבא · דקה-שתיים</b><span class="text-[15px]">${fb.next.text}</span></span>
+        <button type="button" class="shrink-0 rounded-xl bg-white px-4 py-2 text-[14px] font-bold text-brand-600 hover:bg-brand-50 cursor-pointer" onClick=${() => onPractice(fb.next.stageN)}>לתרגל עכשיו</button>
+      </section>
+      <section class="fb-panel !p-4">
+        <h2 class="mb-2 text-[15px] font-bold">מה עבד</h2>
+        ${fb.worked.length
+          ? html`<ul class="flex flex-col gap-2.5">${fb.worked.map((w, i) => html`<li key=${i} class="flex items-start gap-2.5"><span class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-600 text-[11px] font-bold text-white">✓</span><span class="min-w-0"><b class="block text-[15px]">"${w.quote}"</b><span class="text-[14px] text-muted">${w.did}</span></span></li>`)}</ul>`
+          : html`<p class="text-[15px] text-muted">השיחה קצרה מדי כדי להצביע על משהו מדויק.</p>`}
+      </section>
+      ${fb.flags.length > 0 && html`<p class="flex items-start gap-2 rounded-xl bg-warn-50 px-3.5 py-2.5 text-[15px] text-warn"><${Icon} name="flag" size=${16} class="mt-0.5 shrink-0" /><span>${fb.flags.join(' · ')}</span></p>`}
+      ${fb.more.length > 0 &&
+      html`<div>
+        <button type="button" aria-expanded=${more} class="inline-flex items-center gap-1 text-[14px] font-bold text-muted hover:text-ink cursor-pointer" onClick=${() => setMore(!more)}><${Icon} name=${more ? 'chevron-up' : 'chevron-down'} size=${15} />עוד ${fb.more.length} דברים, לתרגול הבא</button>
+        ${more && html`<ul class="rise mt-2 list-disc space-y-1 ps-6 text-[15px]">${fb.more.map((m) => html`<li key=${m}>${m}</li>`)}</ul>`}
       </div>`}
     </div>`}
 
@@ -211,24 +231,21 @@ export function Feedback({ call, onPractice, notify }) {
     </section>`}
 
     ${tab === 'hidden' &&
-    html`<div class="grid gap-3 md:grid-cols-[1fr_0.7fr]">
+    html`<div>
+      <p class="mb-3 text-[15px] text-muted">בשיחה אמיתית את זה לא רואים. ${client.first} ${client.fem ? 'חשפה' : 'חשף'} שכבה רק אחרי שאלה טובה. כאן רואים מה עוד היה שם.</p>
       <section class="fb-panel !p-4">
         <p class="mb-2 text-[15px]">${H.who}. ${client.fem ? 'אמרה שהיא כאן כי' : 'אמר שהוא כאן כי'}: "${H.stated}".</p>
         <ul class="flex flex-col divide-y divide-line">
           ${hiddenRows.map(([k, label, v]) => {
             const h = hits[k];
-            return html`<li key=${k} class="flex items-start gap-3 py-2"><span class=${cx('mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-bold', h === true ? 'bg-brand-600 text-white' : h === false ? 'bg-warn-50 text-warn' : 'bg-canvas text-faint')}>${h === true ? '✓' : h === false ? '!' : '–'}</span><span class="min-w-0"><b class="block text-[14px] text-muted">${label} · ${h === true ? 'גילית' : h === false ? 'פספסת' : 'לא רלוונטי'}</b><span class="text-[15px]">${v}</span></span></li>`;
+            return html`<li key=${k} class="flex items-start gap-3 py-2.5"><span class=${cx('mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-bold', h === true ? 'bg-brand-600 text-white' : h === false ? 'bg-warn-50 text-warn' : 'bg-canvas text-faint')}>${h === true ? '✓' : h === false ? '!' : '–'}</span><span class="min-w-0"><b class="block text-[14px] text-muted">${label} · ${h === true ? 'גילית' : h === false ? 'פספסת' : 'לא רלוונטי'}</b><span class="text-[15px]">${v}</span></span></li>`;
           })}
         </ul>
       </section>
-      <${Note} tone="white" tilt=${-1} class="!p-4 self-start">
-        <span class="fb-note-kicker">למה זה מוצג רק עכשיו</span>
-        <span class="text-[15px]">בשיחה אמיתית את זה לא רואים. ${client.first} ${client.fem ? 'חשפה' : 'חשף'} שכבה רק אחרי שאלה טובה, וכאן רואים מה עוד היה שם.</span>
-      <//>
     </div>`}
 
     ${tab === 'map' &&
-    html`<div class="grid gap-3 md:grid-cols-3">
+    html`<div class="grid gap-3 sm:grid-cols-2">
       ${GROUPS.map((gr, i) => html`<section key=${gr} class="fb-panel !p-3">
         <p class="mb-1.5 text-[14px] font-bold">${i + 1}. ${gr}</p>
         ${STAGES.filter((s) => s.group === i).map((s) => {
@@ -236,7 +253,7 @@ export function Feedback({ call, onPractice, notify }) {
           return html`<p key=${s.n} class="flex items-center justify-between gap-2 py-1 text-[14px]"><span>${s.n}. ${s.name}</span><${Tag} tone=${tone}>${label}<//></p>`;
         })}
       </section>`)}
-      <p class="text-[14px] text-muted md:col-span-3">יחס הדיבור: ${client.first} ${fb.ratio}% מהשיחה. ${fb.ratio >= 60 ? 'טוב.' : 'הלקוח צריך לדבר לפחות פי שניים.'}</p>
+      <p class="text-[14px] text-muted sm:col-span-2">יחס הדיבור: ${client.first} ${fb.ratio}% מהשיחה. ${fb.ratio >= 60 ? 'טוב.' : 'הלקוח צריך לדבר לפחות פי שניים.'}</p>
     </div>`}
 
     ${explain && EXPLAIN[fb.fix.stageN] &&

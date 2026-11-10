@@ -279,7 +279,7 @@ function App({ view: shellView, onViewChange }) {
 
   const bottom = {
     opening: html`<${BottomBar} status=${html`<span></span>`} primary=${html`<${PrimaryButton} label="מתחילים" onClick=${() => go({ screen: 'room' })} />`} />`,
-    room: html`<${BottomBar} status=${html`<${Status} reason=${needCall} hint="בוחרים לקוח, או כלי מתחת לכרטיסים" />`} primary=${finishBtn} />`,
+    room: html`<${BottomBar} status=${html`<${Status} reason=${needCall} hint="בוחרים לקוח ומתחילים" />`} primary=${finishBtn} />`,
     brief: html`<${BottomBar} back=${toRoom} status=${html`<${Status} hint=${`רמה ${level} · כ-20 דקות`} />`} primary=${html`<${PrimaryButton} label="להתחיל את השיחה" onClick=${() => startCall(route.clientId)} />`} />`,
     call: call && html`<${BottomBar}
       back=${toRoom}
