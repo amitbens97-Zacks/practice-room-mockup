@@ -132,9 +132,10 @@ export function Brief({ client, level, setLevel }) {
     <p class="mb-2 text-[14px] font-bold">רמת קושי</p>
     <div class="grid grid-cols-4 gap-1 rounded-2xl bg-canvas p-1 ring-1 ring-line" role="radiogroup" aria-label="רמת קושי">
       ${LEVELS.map(
-        (l) => html`<button key=${l.id} type="button" role="radio" aria-checked=${level === l.id} onClick=${() => setLevel(l.id)} class=${cx('rounded-xl px-2 py-2 text-[14px] font-bold transition cursor-pointer', level === l.id ? 'bg-white text-brand-600 shadow-sm ring-1 ring-brand-300' : 'text-muted hover:text-ink')}>${l.label.split(' · ')[1]}</button>`,
+        (l) => html`<button key=${l.id} type="button" role="radio" aria-checked=${level === l.id} onClick=${() => setLevel(l.id)} class=${cx('flex flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[14px] font-bold transition cursor-pointer sm:flex-row sm:justify-center sm:gap-1.5', level === l.id ? 'bg-white text-brand-600 shadow-sm ring-1 ring-brand-300' : 'text-muted hover:text-ink')}><span class=${cx('grid h-6 w-6 place-items-center rounded-full text-[12px]', level === l.id ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-line')}>${l.id}</span>${l.label.split(' · ')[1]}</button>`,
       )}
     </div>
+    <p class="mt-1.5 flex items-center px-2 text-[12px] font-bold text-faint" aria-hidden="true"><span>הכי קל</span><span class="mx-2 h-px flex-1 bg-line"></span><span>הכי קשה</span></p>
     <p class="mt-2 text-center text-[14px] text-muted">${L.sub}</p>
   </div>`;
 }
