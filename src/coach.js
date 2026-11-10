@@ -328,22 +328,69 @@ export function userSays(call, text) {
 }
 
 // "רמז": out of character for a line, a direction without the answer (prompt 2).
+// It reads the conversation: what the client just said, what the user just did, and
+// what is still missing. It never writes the user's next line, and never repeats itself.
+const clean = (t) => t.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+const short = (t, n = 48) => (t.length <= n ? t : `${t.slice(0, t.lastIndexOf(' ', n) > 20 ? t.lastIndexOf(' ', n) : n)}...`);
+// The sentence of a client line that holds the hook word.
+function hookOf(c, text) {
+  const t = clean(text);
+  for (const re of CLIENT_WORDS[c.id] || []) {
+    if (!re.test(t)) continue;
+    const s = t.split(/(?<=[.?!])\s+/).find((x) => re.test(x)) || t;
+    return { re, quote: short(s.replace(/[.]$/, '')) };
+  }
+  return null;
+}
+
 export function hintFor(call) {
   const f = call.f;
   const c = CLIENTS.find((x) => x.id === call.clientId);
-  if (!call.msgs.length) return 'פותחים באדם, לא בעסק. ואחר כך אומרים מה יקרה בשיחה.';
-  if (call.pending && !f.worryQ) return 'זו לא התנגדות על המוצר. יש דאגה מאחוריה. מה היא?';
-  if (call.pending && !f.isolate) return 'לפני שעונים: זה הדבר היחיד שעוצר?';
-  if (!f.frame) return `${c.first} לא יודע/ת מה יקרה בשיחה ושבסוף מחליטים.`.replace('יודע/ת', c.fem ? 'יודעת' : 'יודע');
-  if (!f.whyNow) return 'עוד לא שמעת למה דווקא עכשיו.';
-  if (!f.tries) return 'מה כבר קרה לפני השיחה הזאת? שם מסתתרת התחמושת.';
-  if (!f.motive) return 'יש מספר, אין סיבה. מה ישתנה בחיים כשזה יקרה?';
-  if (!f.budget && !f.decider && !f.time) return 'יש עוד מכשול שלא עלה. כסף, זמן, או מישהו נוסף?';
-  if (!f.summary) return `${c.first} עוד לא שמע/ה את הבעיה שלו/ה במילים שלו/ה.`.replace('שמע/ה', c.fem ? 'שמעה' : 'שמע').replace(/שלו\/ה/g, c.fem ? 'שלה' : 'שלו');
-  if (!f.permission) return 'לפני ההצגה, מבקשים רשות.';
-  if (!f.price) return 'ההצגה קצרה ומחוברת למילים שלה/ו. אחר כך שלוש שאלות, ואז המספר.'.replace('שלה/ו', c.fem ? 'שלה' : 'שלו');
-  if (!f.close) return 'שמעת מספיק כן. מה מבקשים עכשיו?';
-  return 'אף שיחה לא נגמרת בלי מועד ביומן.';
+  const she = (fem, masc) => (c.fem ? fem : masc);
+  const msgs = call.msgs.filter((m) => m.who === 'me' || m.who === 'client');
+  const mine = msgs.filter((m) => m.who === 'me').map((m) => m.text);
+  const theirs = msgs.filter((m) => m.who === 'client').map((m) => m.text);
+  const lastMe = mine[mine.length - 1] || '';
+  const lastThem = theirs[theirs.length - 1] || '';
+  const said = she('אמרה', 'אמר');
+  const out = [];
+  const add = (cond, text) => cond && out.push(text);
+
+  add(!mine.length, `${c.first} ${she('מחכה', 'מחכה')}. פותחים באדם, לא בעסק, ואחר כך אומרים מה יקרה בשיחה ושבסוף מחליטים.`);
+  // What the user just did.
+  add(lastMe.length > 160 && !IS.question(lastMe), `ההודעה האחרונה שלך ארוכה, ו${c.first} ${she('נסגרה', 'נסגר')} קצת. ${g('עצור', 'עצרי')} כאן, ו${g('שאל', 'שאלי')} שאלה קצרה אחת על מה ש${she('היא', 'הוא')} ${said}.`);
+  add(/התוכנית שלי|אני מציע|השירות שלי|מה שאני עושה|אצלי (את|אתה|בונים|עובדים)/.test(lastMe) && !f.summary, `התחלת להציג לפני ש${c.first} ${she('שמעה', 'שמע')} שהבנת ${she('אותה', 'אותו')}. קודם לשמוע ולסכם, אחר כך להציג.`);
+  add(f.discount && lastMe === f.discount, 'הצעת הנחה לפני שהבנת מה מדאיג. מה קורה למחיר בעיני הלקוח כשהוא יורד כל כך מהר?');
+  add(f.urgency && lastMe === f.urgency, `${c.first} ${she('הרגישה', 'הרגיש')} לחץ. מה יחזיר את השקט? שאלה, לא עוד סיבה לקנות עכשיו.`);
+  add(f.argue && lastMe === f.argue, `התווכחת עם ${c.first}. מה ${she('היא', 'הוא')} באמת ${she('מנסה', 'מנסה')} להגיד? קודם להבין, אחר כך לענות.`);
+  // An objection on the table.
+  add(call.pending && !f.worryQ, `"${short(clean(lastThem))}": זו לא התנגדות על המוצר. יש דאגה מאחוריה. מה היא?`);
+  add(call.pending && f.worryQ && !f.isolate, `שמעת את הדאגה. לפני שעונים: זה הדבר היחיד שעוצר את ${c.first}?`);
+  add(call.pending && f.worryQ && f.isolate, `עכשיו עונים בדיוק על הדאגה ש${c.first} ${said}, ובודקים: זה סוגר את זה?`);
+  // What the client just said.
+  const hook = lastThem && hookOf(c, lastThem);
+  const echoed = hook && mine.slice(-1).some((t) => hook.re.test(t));
+  add(hook && !echoed && !f.summary, `${c.first} ${said} "${hook?.quote}". מה עומד מאחורי זה? שאלה אחת לעומק, לפני שעוברים הלאה.`);
+  // A shallow answer to a real question (not small talk, not the frame).
+  const shallow = lastThem && clean(lastThem).length < 28 && mine.length > 1 && IS.question(lastMe) && !IS.small(lastMe) && !IS.frame(lastMe);
+  add(shallow, `"${clean(lastThem)}" זו תשובה קצרה. ${c.first} ${she('תפתח', 'יפתח')} עוד שכבה רק לשאלה פתוחה על משהו ש${she('היא', 'הוא')} כבר ${said}.`);
+  // What is still missing, in the order of the call.
+  add(!f.frame, `${c.first} עוד לא ${she('יודעת', 'יודע')} מה יקרה בשיחה ושבסוף מחליטים יחד.`);
+  add(!f.whyNow, `עוד לא שמעת למה דווקא עכשיו. משהו קרה, שבגללו ${c.first} ${she('השאירה', 'השאיר')} פרטים.`);
+  add(!f.tries, 'מה כבר קרה לפני השיחה הזאת? מה ניסו, ומה לא עבד. שם מסתתרת התחמושת.');
+  add(!f.motive, `יש בעיה, אין סיבה. מה ישתנה אצל ${c.first} כשזה ייפתר?`);
+  add(!f.budget && !f.decider && !f.time, 'יש עוד מכשול שלא עלה. כסף, זמן, או מישהו נוסף שמחליט?');
+  const heard = theirs.map((t) => hookOf(c, t)).filter(Boolean).map((h) => `"${h.quote}"`);
+  add(!f.summary, heard.length >= 2 ? `שמעת: ${[...new Set(heard)].slice(0, 3).join(', ')}. ${c.first} עוד לא ${she('שמעה', 'שמע')} את זה ממך, במילים ${she('שלה', 'שלו')}.` : `${c.first} עוד לא ${she('שמעה', 'שמע')} את הבעיה ${she('שלה', 'שלו')} במילים ${she('שלה', 'שלו')}.`);
+  add(!f.permission, `לפני ההצגה, מבקשים רשות. ${c.first} ${she('צריכה', 'צריך')} לרצות לשמוע.`);
+  add(!f.price, `ההצגה קצרה ומחוברת למה ש${c.first} ${said}. אחר כך שלוש שאלות, ואז המספר.`);
+  add(!f.close, 'שמעת מספיק "כן". מה מבקשים עכשיו?');
+  add(true, 'אף שיחה לא נגמרת בלי מועד ביומן.');
+  add(true, `${g('תן', 'תני')} ל${c.first} לדבר. מה ${she('היא', 'הוא')} ${said} שעוד לא שאלת עליו?`);
+
+  // Never the same hint twice in a row.
+  const lastHint = [...call.msgs].reverse().find((m) => m.who === 'hint')?.text;
+  return out.find((h) => h !== lastHint) || out[0];
 }
 
 // ---------- The feedback, by prompt section 8 ----------

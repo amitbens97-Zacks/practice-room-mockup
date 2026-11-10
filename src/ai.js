@@ -159,18 +159,37 @@ export async function clientTurn(call) {
 }
 
 // ---------- "/רמז" ----------
+const HINT_SCHEMA = {
+  type: 'object',
+  properties: { hint: { type: 'string', description: 'הרמז: שורה או שתיים, מחוץ לדמות' } },
+  required: ['hint'],
+  additionalProperties: false,
+};
+
 export async function hint(call) {
   const c = CLIENTS.find((x) => x.id === call.clientId);
+  const before = call.msgs.filter((m) => m.who === 'hint').map((m) => `- ${m.text}`);
   const system = [
-    'מצב פעיל: סימולציה. המתאמן ביקש /רמז: צא מהדמות לשורה או שתיים, תן כיוון בלי לפתור ובלי לכתוב את המשפט במקומו. אל תחשוף את המצב הנסתר.',
+    'מצב פעיל: סימולציה. המתאמן ביקש /רמז (סעיף 2): צא מהדמות לשורה או שתיים, תן כיוון בלי לפתור ובלי לכתוב את המשפט הבא במקומו. אל תחשוף את המצב הנסתר.',
     trainee(),
     persona(c, call.level),
-    'החזר רק את הרמז, בלי פתיח.',
+    [
+      'הרמז נשען על מה שקרה בשיחה עצמה, לא על כלל כללי:',
+      `- התחל ממה שקרה עכשיו: ציטוט קצר מההודעה האחרונה של ${c.first} או של המתאמן, ואז הכיוון.`,
+      '- אם המתאמן פספס משהו ש' + c.first + ' אמר (פרט, מספר, רגש), כוון אליו.',
+      '- אם השיחה לא התחילה, כוון לפתיחה ולמסגור.',
+      '- בלי פתיח ובלי "רמז:".',
+      before.length ? `רמזים שכבר ניתנו בשיחה הזאת, אל תחזור עליהם:\n${before.join('\n')}` : '',
+    ].filter(Boolean).join('\n'),
   ].join('\n\n');
   const msgs = history(call);
   if (msgs.length && msgs[msgs.length - 1].role === 'user') msgs[msgs.length - 1].content += '\n\n/רמז';
-  else msgs.push({ role: 'user', content: '/רמז' });
-  return ask({ system, messages: msgs, effort: 'low', maxTokens: 1000 });
+  else msgs.push({ role: 'user', content: msgs.length ? '/רמז' : '(השיחה עוד לא התחילה) /רמז' });
+  // Room for thinking: a small max_tokens can end before any text comes out.
+  const out = await ask({ system, messages: msgs, schema: HINT_SCHEMA, effort: 'low', maxTokens: 4000 });
+  const text = (out.hint || '').trim();
+  if (!text) throw new Error('הרמז חזר ריק');
+  return text;
 }
 
 // ---------- "/עצור": the feedback (section 8) ----------

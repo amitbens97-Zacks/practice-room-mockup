@@ -187,7 +187,9 @@ function App({ view: shellView, onViewChange }) {
       const text = await ai.hint(stateRef.current.calls.find((c) => c.id === id));
       setCall(id, (c) => ({ msgs: [...c.msgs, { who: 'hint', text }], hints: c.hints + 1 }));
     } catch (e) {
-      setCall(id, (c) => ({ msgs: [...c.msgs, { who: 'note', text: aiError(e) }] }));
+      // The button always gives a hint: if the model fails, the rule hint reads the same conversation.
+      setCall(id, (c) => ({ msgs: [...c.msgs, ...(e?.status === 401 ? [{ who: 'note', text: aiError(e) }] : []), { who: 'hint', text: hintFor(c) }], hints: c.hints + 1 }));
+      if (e?.status !== 401) console.error(e);
     }
     setBusy(null);
   };
