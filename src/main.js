@@ -26,18 +26,15 @@ const SCREENS = ['opening', 'room', 'brief', 'call', 'feedback', 'stage', 'drill
 const PART_OF = { room: 0, brief: 0, drill: 0, analysis: 0, call: 1, feedback: 2, stage: 2, sheet: 3 };
 
 const freshState = () => ({ calls: [], sheet: SHEET.map((r) => ({ ...r })), drill: { done: 0 }, done: false });
+// The mockup always opens the step from zero: no calls, no "מהפעם הקודמת".
+// Progress lives only while the page is open (and across the phone/desktop switch).
 function loadState() {
   try {
-    const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && Array.isArray(s.calls) && Array.isArray(s.sheet)) return s;
+    localStorage.removeItem(KEY);
   } catch {}
   return freshState();
 }
-const saveState = (s) => {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(s));
-  } catch {}
-};
+const saveState = () => {};
 
 let seq = Date.now();
 const nextId = () => `c${seq++}`;
@@ -84,7 +81,8 @@ function App({ view: shellView, onViewChange }) {
 
   function startRoute() {
     const s = params.get('screen');
-    if (s === 'sample') return { screen: 'feedback', sampleNow: true };
+    // A fresh page has no calls, so a reload on the feedback opens the sample feedback.
+    if (s === 'sample' || s === 'feedback') return { screen: 'feedback', sampleNow: true };
     if (s === 'brief' || s === 'call') return { screen: s, clientId: 'ronit', fresh: s === 'call' };
     if (s === 'stage') return { screen: 'stage', stageN: 7, clientId: 'ronit' };
     return { screen: SCREENS.includes(s) ? s : 'opening' };
