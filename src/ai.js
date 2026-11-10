@@ -4,7 +4,7 @@
 // system does in production.
 // The mockup is a static page, so the API key is typed by whoever opens it (Shift+D) and
 // is kept only in that browser's localStorage. Without a key, coach.js plays the client.
-import { USER, CONTEXT, CLIENT_FILE, CLIENTS, LEVELS, STAGES, g } from './data.js';
+import { USER, CONTEXT, CLIENT_FILE, CLIENTS, LEVELS, STAGES, DIMS as DIM_LIST, g } from './data.js';
 import { money } from './lib.js';
 
 const KEY = 'flowbiz-pr-apikey';
@@ -85,6 +85,8 @@ function persona(c, level) {
     `- הסיבה המוצהרת: ${H.stated}.`,
     `- המניע האמיתי: ${H.motive}.`,
     `- ניסיונות קודמים: ${H.tries.join(' | ')}.`,
+    `- הצורך (מה פתרון חייב לכלול; יגיד רק אם ישאלו): ${H.need}.`,
+    `- התאמה אמיתית (סעיף 3.6): ${H.fit.text}. הדמות לא הופכת למתאימה כי המתאמן הציג יפה.`,
     `- מכשול נסתר: ${H.obstacle}.`,
     `- מקבל החלטות נוסף: ${H.decider}.`,
     `- תקציב: ${H.budget}.`,
@@ -138,7 +140,7 @@ const TURN_SCHEMA = {
   type: 'object',
   properties: {
     reply: { type: 'string', description: 'מה הלקוח אומר עכשיו, בעברית מדוברת, עם הערות במה בסוגריים כשהן משנות משהו' },
-    stage: { type: 'integer', description: 'השלב בסעיף 4 (0-13) שהשיחה הגיעה אליו בהודעה האחרונה של המתאמן' },
+    stage: { type: 'integer', description: 'השלב בסעיף 4 (0-15) שהשיחה הגיעה אליו בהודעה האחרונה של המתאמן' },
     outcome: { type: 'string', enum: ['none', 'buy', 'next', 'no', 'think'] },
   },
   required: ['reply', 'stage', 'outcome'],
@@ -152,10 +154,10 @@ export async function clientTurn(call) {
     trainee(),
     persona(c, call.level),
     `ענה רק כלקוח, לפי 5.3 ו-5.4. בשדה stage: מספר השלב שהמתאמן הגיע אליו (${STAGE_LIST}).`,
-    'בשדה outcome: none כל עוד אין החלטה. buy אם הדמות קנתה, next אם נקבע צעד הבא מוגדר (מועד, שליחת הצעה ושיחה נוספת), no אם הדמות סירבה ונפרדתם, think אם הדמות דחתה ל"צריך לחשוב" ומסיימת את השיחה.',
+    'בשדה outcome: none כל עוד אין החלטה. buy אם הדמות קנתה, next אם נקבע צעד הבא מוגדר (מועד, שליחת הצעה ושיחה נוספת), no אם הדמות סירבה או שנפרדתם (גם פרידה יפה כשאין התאמה), think אם הדמות דחתה ל"צריך לחשוב" ומסיימת את השיחה.',
   ].join('\n\n');
   const out = await ask({ system, messages: history(call), schema: TURN_SCHEMA, effort: 'low' });
-  return { reply: out.reply, stage: Math.max(0, Math.min(13, out.stage | 0)), outcome: out.outcome === 'none' ? null : out.outcome };
+  return { reply: out.reply, stage: Math.max(0, Math.min(15, out.stage | 0)), outcome: out.outcome === 'none' ? null : out.outcome };
 }
 
 // ---------- "/רמז" ----------
@@ -193,7 +195,7 @@ export async function hint(call) {
 }
 
 // ---------- "/עצור": the feedback (section 8) ----------
-export const DIMS = ['מסגור ופתיחה', 'עומק הגילוי', 'סיכום ותיוג', 'מכשולים לפני המחיר', 'המעבר וההצגה', 'המחיר', 'טיפול בהתנגדויות', 'בקשת החלטה', 'טון ויחס דיבור'];
+export const DIMS = DIM_LIST.map((d) => d.name);
 const nb = { anyOf: [{ type: 'boolean' }, { type: 'null' }] };
 const mapProps = Object.fromEntries(STAGES.map((s) => [`s${s.n}`, { type: 'string', enum: ['done', 'partial', 'missing', 'early'] }]));
 const FEEDBACK_SCHEMA = {
@@ -221,8 +223,8 @@ const FEEDBACK_SCHEMA = {
     },
     hiddenHits: {
       type: 'object',
-      properties: { motive: nb, tries: nb, obstacle: nb, decider: nb, budget: nb, condition: nb },
-      required: ['motive', 'tries', 'obstacle', 'decider', 'budget', 'condition'],
+      properties: { motive: nb, tries: nb, need: nb, fit: nb, obstacle: nb, decider: nb, budget: nb, condition: nb },
+      required: ['motive', 'tries', 'need', 'fit', 'obstacle', 'decider', 'budget', 'condition'],
       additionalProperties: false,
     },
     map: { type: 'object', properties: mapProps, required: Object.keys(mapProps), additionalProperties: false },
@@ -240,9 +242,9 @@ export async function feedback(call, ratio) {
     persona(c, call.level),
     [
       `outcome: התוצאה לפי 3.1 (buy, next, no, think). שיחה שנעצרה לפני החלטה היא think. התוצאה שנקבעה בשיחה: ${call.outcome || 'אין'}.`,
-      'line: השורה האחת. worked: 2-3 דברים, עם ציטוט מדויק של המתאמן. fix: התיקון האחד (title קצר, what = ציטוט או תיאור הרגע, effect = מה זה עשה ללקוח, principle, alt = ניסוח חלופי מוכן, stageN = השלב בסעיף 4).',
-      'more: עד 3. flags: דגלים אדומים מ-8.2 שקרו, ניסוח קצר. scores: 9 הממדים של 8.1 לפי הסדר, score 1-5 או null ל"לא הגיע", why = משפט אחד.',
-      `hiddenHits: לכל פריט במצב הנסתר, true אם המתאמן גילה אותו, false אם פספס, null אם לא רלוונטי (למשל אין מקבל החלטות נוסף). map: לכל שלב s0-s13: done, partial, missing או early. next: התרגיל הבא (stageN = השלב לתרגל, text = הצעה מדויקת).`,
+      'line: השורה האחת. worked: 2-3 דברים, עם ציטוט מדויק של המתאמן. fix: התיקון האחד לפי הכלל בסעיף 8, השלב השבור המוקדם ביותר (title קצר, what = ציטוט או תיאור הרגע, effect = מה זה עשה ללקוח, principle, alt = ניסוח חלופי מוכן, stageN = השלב בסעיף 4).',
+      'more: עד 3. flags: דגלים אדומים מ-8.2 שקרו, ניסוח קצר. scores: 10 הממדים של 8.1 לפי הסדר, score 1-5 או null ל"לא הגיע" או "לא נדרש", why = משפט אחד.',
+      `hiddenHits: לכל פריט במצב הנסתר, true אם המתאמן גילה אותו, false אם פספס, null אם לא רלוונטי (למשל אין מקבל החלטות נוסף). fit = true אם המתאמן אמר בקול את ההתאמה הנכונה (המסלול הנכון, או שאין התאמה). map: לכל שלב s0-s15: done, partial, missing או early. next: התרגיל הבא (stageN = השלב לתרגל, text = הצעה מדויקת).`,
       `יחס הדיבור שנמדד בקוד: ${c.first} ${ratio}% מהמילים.`,
       `כתוב בעברית, פנה למתאמן ${g('בלשון זכר', 'בלשון נקבה')}, ועל ${c.first} ${c.fem ? 'בלשון נקבה' : 'בלשון זכר'}.`,
     ].join('\n'),

@@ -3,7 +3,7 @@
 import { html, useState, useEffect, useRef, Icon, cx } from './lib.js';
 import { Button, Note, SharkAvatar } from './components.js';
 import { Sheet, Tag } from './ui.js';
-import { CLIENTS, GROUPS, STAGES, LEVELS, EXPLAIN, STAGE_DRILL, g } from './data.js';
+import { CLIENTS, GROUPS, STAGES, LEVELS, EXPLAIN, STAGE_DRILL, fixDim, g } from './data.js';
 import { talkRatio, stageFeedback } from './coach.js';
 import { Avatar, OUTCOME, outcomeLabel } from './step.js';
 
@@ -32,11 +32,11 @@ function Bubble({ m, client }) {
 // What to aim for in each part of the call: one line, so the user always knows what's next.
 const NEXT = (c) => [
   'פותחים באדם, ואומרים מה יקרה בשיחה ושבסוף מחליטים.',
-  `שואלים למה עכשיו, מה כבר ${c.fem ? 'ניסתה' : 'ניסה'}, ומה ישתנה. ${c.first} ${c.fem ? 'מדברת' : 'מדבר'}, ${g('אתה מקשיב', 'את מקשיבה')}.`,
-  `מסכמים במילים של ${c.first}, עד ש${c.fem ? 'תגיד' : 'יגיד'} "נכון, בדיוק".`,
-  'מבקשים רשות, ומציגים קצר. כל משפט מחובר למה שנאמר.',
+  `שאלה אחת בכל פעם: למה עכשיו, מה כבר ${c.fem ? 'ניסתה' : 'ניסה'}, מה ישתנה, ומה הפתרון חייב לכלול. ${c.first} ${c.fem ? 'מדברת' : 'מדבר'}, ${g('אתה מקשיב', 'את מקשיבה')}.`,
+  `מסכמים במילים של ${c.first} עד "נכון", שואלים על כסף, זמן ומי מחליט, ואז ${g('אומר', 'אומרת')} בקול: זה מתאים ${c.fem ? 'לה' : 'לו'}?`,
+  'מבקשים רשות, ומציגים קצר רק את מה שמתאים. כל משפט מחובר למה שנאמר.',
   'אומרים את המחיר ושותקים. התנגדות? קודם שואלים מה מדאיג.',
-  'קובעים מועד ביומן. "נדבר" זה לא צעד הבא.',
+  'יש התאמה? מועד ביומן. אין? כיוון או הפניה, ופרידה יפה.',
 ];
 const groupNow = (reached) => {
   const max = reached.length ? Math.max(...reached) : -1;
@@ -153,13 +153,16 @@ export function Feedback({ call, onPractice, notify }) {
   const [more, setMore] = useState(false);
   const real = fb.scores.filter((s) => s[1] != null);
   const avg = fb.avg ?? real.reduce((s, x) => s + x[1], 0) / real.length;
-  const weakest = real.reduce((a, b) => (b[1] < a[1] ? b : a), real[0]);
+  // The one fix (prompt v2 8): the earliest broken stage, not always the lowest score.
+  const weakest = fb.scores[fixDim(fb.scores)];
   const o = OUTCOME[fb.outcome];
   const H = client.hidden;
   const hits = fb.hiddenHits || {};
   const hiddenRows = [
     ['motive', 'המניע האמיתי', H.motive],
     ['tries', 'ניסיונות קודמים', H.tries.join(' · ')],
+    ['need', 'מה הפתרון חייב לכלול', H.need],
+    ['fit', 'האם זה באמת התאים', H.fit.text],
     ['obstacle', 'המכשול הנסתר', H.obstacle],
     ['decider', 'מי עוד מחליט', H.decider],
     ['budget', 'תקציב', H.budget],
@@ -227,7 +230,7 @@ export function Feedback({ call, onPractice, notify }) {
           ${fb.scores.map(([d, n, why]) => html`<tr key=${d} class=${cx('border-b border-line last:border-0', weakest && d === weakest[0] && 'bg-warn-50')}><td class="px-4 py-2.5 md:w-[190px]"><b class="block">${d}</b><span class="block text-[14px] text-muted md:hidden">${why}</span></td><td class="w-[96px] px-2 md:w-[110px]"><${Dots5} n=${n} /></td><td class="hidden px-2 py-2.5 text-muted md:table-cell">${why}</td></tr>`)}
         </tbody>
       </table>
-      <p class="border-t border-line px-4 py-3 text-[15px]"><b>ממוצע ${avg.toFixed(1)}</b> · הממד החלש: <b>${weakest?.[0]}</b>, וזה גם התיקון האחד.</p>
+      <p class="border-t border-line px-4 py-3 text-[15px]"><b>ממוצע ${avg.toFixed(1)}</b> · התיקון האחד: <b>${weakest?.[0]}</b>, השלב השבור המוקדם ביותר בשיחה.</p>
     </section>`}
 
     ${tab === 'hidden' &&
@@ -266,8 +269,8 @@ export function Feedback({ call, onPractice, notify }) {
 
 // ---------- single stage, again and again (mode ד) ----------
 export function StageDrill({ stageN, clientId, onDone }) {
-  const spec = STAGE_DRILL[stageN] || STAGE_DRILL[7];
-  const stage = STAGES.find((s) => s.n === (STAGE_DRILL[stageN] ? stageN : 7));
+  const spec = STAGE_DRILL[stageN] || STAGE_DRILL[8];
+  const stage = STAGES.find((s) => s.n === (STAGE_DRILL[stageN] ? stageN : 8));
   const client = CLIENTS.find((c) => c.id === (clientId || 'ronit'));
   const [text, setText] = useState('');
   const [tries, setTries] = useState([]);
@@ -288,8 +291,8 @@ export function StageDrill({ stageN, clientId, onDone }) {
     </div>
     <div class="flex flex-col gap-3">
       <label class="block">
-        <span class="mb-1 block text-[14px] font-bold">${g('הסיכום שלך', 'הסיכום שלך')}, במילים של ${client.first}</span>
-        <textarea rows="4" value=${text} onInput=${(e) => setText(e.target.value)} placeholder="אז אם אני מסכם..." class="w-full resize-none rounded-xl border-[1.5px] border-line bg-white px-3 py-2.5 text-[16px] outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"></textarea>
+        <span class="mb-1 block text-[14px] font-bold">${spec.label}</span>
+        <textarea rows="4" value=${text} onInput=${(e) => setText(e.target.value)} placeholder=${spec.placeholder} class="w-full resize-none rounded-xl border-[1.5px] border-line bg-white px-3 py-2.5 text-[16px] outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"></textarea>
       </label>
       <div class="flex gap-2"><${Button} variant="mini" onClick=${check}><${Icon} name="check" size=${15} />לבדוק<//>${last?.res.done && html`<${Button} variant="mini" onClick=${onDone}>חזרה למשוב<//>`}</div>
       ${last &&
@@ -299,7 +302,7 @@ export function StageDrill({ stageN, clientId, onDone }) {
           const ok = last.res.hits.includes(k);
           return html`<li key=${k.id} class=${cx('flex items-center gap-2 text-[14px]', ok ? 'text-ink' : 'text-muted')}><span class=${cx('grid h-5 w-5 place-items-center rounded-full text-[11px] font-bold', ok ? 'bg-brand-600 text-white' : 'bg-canvas ring-1 ring-line')}>${ok ? '✓' : ''}</span>${k.label}</li>`;
         })}</ul>
-        <p class="text-[15px] font-semibold">${last.res.done ? `זה הסיכום. ${client.first} הייתה אומרת "נכון, בדיוק". עכשיו: "זה לא באשמתך, חסרה חתיכה אחת".` : `${last.res.fix} ${g('נסה', 'נסי')} שוב.`}</p>
+        <p class="text-[15px] font-semibold">${last.res.done ? spec.done : `${last.res.fix} ${g('נסה', 'נסי')} שוב.`}</p>
       <//>`}
     </div>
   </div>`;
