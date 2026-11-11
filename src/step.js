@@ -224,7 +224,7 @@ export function ContextSheet({ onClose }) {
 
 // ---------- the brief before a call ----------
 // Who, what they wrote, the goal, and how hard. The call structure shows live in the call.
-export function Brief({ client, level, setLevel }) {
+export function Brief({ client, level, setLevel, onPrep }) {
   const L = LEVELS.find((l) => l.id === level);
   return html`<div class="mx-auto max-w-[620px] px-4 py-6 md:py-10">
     <div class="mb-5 flex flex-col items-center text-center">
@@ -235,7 +235,8 @@ export function Brief({ client, level, setLevel }) {
     <section class="fb-panel mb-4 !p-4">
       <p class="mb-1 text-[13px] font-bold text-muted">${client.from}</p>
       <p class="text-[17px]">${client.fem ? 'כתבה' : 'כתב'}: <b>"${client.said}"</b></p>
-      ${client.real && html`<p class="mt-2 flex items-start gap-1.5 border-t border-line pt-2 text-[14px] text-muted"><${Icon} name="notebook-pen" size=${14} class="mt-0.5 shrink-0" />נבנה מהתיאור שלך. מה שלא כתבת הושלם כהשערה, ומסומן במשוב.</p>`}
+      ${client.real && html`<p class="mt-2 flex items-start gap-1.5 border-t border-line pt-2 text-[14px] text-muted"><${Icon} name="notebook-pen" size=${14} class="mt-0.5 shrink-0" />נבנה מהתיאור שלך. מה שלא כתבת הושלם כהשערה, ומסומן במשוב.</p>
+      <button type="button" onClick=${onPrep} class="mt-2 inline-flex items-center gap-1.5 text-[14px] font-bold text-[#8a5a12] underline underline-offset-2 cursor-pointer"><${Icon} name="clipboard-list" size=${15} />כרטיס הכנה לשיחה האמיתית</button>`}
     </section>
     <section class="mb-6 flex items-start gap-3 rounded-2xl bg-brand-50 p-4">
       <span class="fb-chip-ic h-9 w-9 shrink-0"><${Icon} name="target" size=${18} /></span>

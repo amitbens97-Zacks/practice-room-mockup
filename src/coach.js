@@ -32,8 +32,8 @@ const IS = {
   fault: R(/לא באשמת|חתיכה/),
   permission: R(/רוצה לשמוע|אפשר לספר|רוצה שאספר|מתאים שאספר/),
   threeQ: R(/בעמדה להחליט|בנוח לעבוד|פותר את/),
-  close: R(/נתקדם|נקבע|נסגור|קישור|ראשון או|מתחילים|לסגור/),
-  nextStep: R(/מחר|היום ב|ב-?\d{1,2}(:\d\d)?\b|יום (ראשון|שני|שלישי|רביעי|חמישי)/),
+  close: R(/נתקדם|נקבע|נסגור|קישור|ראשון או|מתחילים|שנתחיל|לסגור/),
+  nextStep: R(/מחר|היום ב|מתי נוח|ביומן|ב-?\d{1,2}(:\d\d)?\b|יום (ראשון|שני|שלישי|רביעי|חמישי)/),
   urgency: R(/רק (היום|עד)|נשאר(ו)? (לי )?(רק )?מקום|המחיר עולה|(יש|עכשיו|רק עכשיו) מבצע|מבצע (רק|עד|מיוחד|לזמן)|לפני שייגמר/),
   discount: R(/הנחה|אוריד|להוריד (את )?המחיר/),
   argue: R(/אבל (את|אתה) לא|(את|אתה) טועה|זה לא נכון|לא הבנת/),
@@ -416,7 +416,8 @@ export function userSays(call, text) {
   }
 
   // The answer to the decision.
-  if (IS.close(text) || (st.pending && IS.nextStep(text))) {
+  // "...איך לסגור את זה. רוצה לשמוע?" asks permission, it is not the close.
+  if ((IS.close(text) && !IS.permission(text)) || (st.pending && IS.nextStep(text))) {
     reach('close');
     if (IS.nextStep(text)) (f.nextStep = text), reach('nextStep');
     f.close = f.close || text;
@@ -466,7 +467,8 @@ export function userSays(call, text) {
     return st;
   }
 
-  if (IS.price(text)) {
+  // A summary that repeats the client's own numbers is not the price.
+  if (IS.price(text) && !IS.summary(text)) {
     reach('price');
     f.price = f.price || text;
     if (!f.summary) f.priceEarly = f.priceEarly || text;
@@ -822,7 +824,8 @@ export function feedbackFor(call) {
         effect,
         principle: PRINCIPLE[wi],
         stageN: DIMS[wi].stage ?? 1,
-        alt: gm(ALT[wi]),
+        // The ready lines speak to a man; to a woman client they are said in the feminine.
+        alt: gm(c.fem ? (ALT[wi] || '').replace(/אתה /g, 'את ').replace('בוא נתקדם', 'בואי נתקדם').replace('תרצה', 'תרצי').replace('תספר ', 'תספרי ') : ALT[wi]),
       }
     : null;
   const more = real.filter((s) => s[1] <= 2 && s[0] !== weakest?.[0]).slice(0, 3).map((s) => `${s[0]}: ${s[2]}`);
@@ -844,12 +847,16 @@ export function feedbackFor(call) {
   map[0] = 'partial';
 
   const stageN = fixBlock?.stageN;
+  // The answer sheet row for this client's objection, in the user's own words: only when
+  // the objection was handled (worry asked, answered, no argument, pressure or discount).
+  const objOk = call.resolved && (f.worryQ || f.handled) && !f.argue && !f.urgency && !f.discount;
+  const said = [...new Set([f.worryQ, f.isolate, f.handled].filter(Boolean))].map(clean);
   return {
     outcome: call.outcome || 'think',
     line: parted
       ? `זיהית בכנות שהתוכנית לא מתאימה ל${c.first} עכשיו, ונפרדתם בטוב. זו שיחה מוצלחת.${weakest && weakest[1] <= 2 ? ` מה שכדאי לחזק: ${weakest[0]}.` : ''}`
       : weakest
-        ? `${weakest[1] <= 2 ? 'הנקודה שעצרה את השיחה' : 'מה שהכי כדאי לחזק'}: ${weakest[0]}.`
+        ? `${weakest[1] <= 2 && !['buy', 'next'].includes(call.outcome) ? 'הנקודה שעצרה את השיחה' : 'מה שהכי כדאי לחזק'}: ${weakest[0]}.`
         : 'שיחה קצרה מדי למשוב מלא.',
     worked,
     fix: fixBlock,
@@ -873,10 +880,20 @@ export function feedbackFor(call) {
     },
     map,
     ratio,
+    sheet: objOk ? { answer: said.join(' (ואחרי שעונה:) '), short: whole(clean(f.handled || f.worryQ), 110) } : null,
   };
 }
 
 const GENDER_F = () => g(false, true);
+// Whole sentences up to n characters (the WhatsApp version on the sheet).
+function whole(t, n) {
+  let out = '';
+  for (const s of t.split(/(?<=[.?!])\s+/)) {
+    if ((out + ' ' + s).trim().length > n) break;
+    out = (out + ' ' + s).trim();
+  }
+  return out || short(t, n);
+}
 
 // ---------- Quick round: three lines of feedback per answer (prompt section 6) ----------
 export function drillFeedback(item, answer, sheetRow) {

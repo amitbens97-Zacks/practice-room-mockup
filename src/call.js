@@ -95,6 +95,7 @@ export function Call({ call, busy, onSend, onHint, onSample }) {
           <span class="ms-auto"><${Ratio} msgs=${call.msgs} client=${client} /></span>
         </div>
         <${Strip} reached=${call.reached} />
+        ${call.focus && html`<p class="mt-2.5 flex items-start gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-[14px]"><${Icon} name="target" size=${15} class="mt-0.5 shrink-0 text-brand-600" /><span><b>הפעם:</b> ${call.focus}</span></p>`}
         ${!call.outcome && html`<p key=${now} class="rise mt-2.5 flex items-start gap-1.5 text-[14px]"><${Icon} name="compass" size=${15} class="mt-0.5 shrink-0 text-brand-600" /><span><b>עכשיו:</b> ${NEXT(client)[now]}</span></p>`}
       </div>
       <div ref=${scroll} class="thin-scroll flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3 md:p-4">
@@ -137,6 +138,13 @@ export function Call({ call, busy, onSend, onHint, onSample }) {
 }
 
 // ---------- the feedback ----------
+// The level-up invite: what changes in the client at the next level (data.js LEVELS), by gender.
+const UP_SUB = {
+  2: ['מפרט רק כשהשאלה טובה', 'מפרטת רק כשהשאלה טובה'],
+  3: ['סקפטי: ניסה דברים, ומשתמש בתירוצים', 'סקפטית: ניסתה דברים, ומשתמשת בתירוצים'],
+  4: ['שחוק: מזהה פיץ׳, ושואל על המחיר מוקדם', 'שחוקה: מזהה פיץ׳, ושואלת על המחיר מוקדם'],
+};
+
 const MAP_LABEL = { done: ['נעשה', 'blue'], partial: ['חלקי', 'muted'], missing: ['חסר', 'muted'], early: ['מוקדם מדי', 'fix'] };
 
 function Dots5({ n }) {
@@ -144,7 +152,7 @@ function Dots5({ n }) {
   return html`<span class="inline-flex gap-1" aria-label=${`${n} מתוך 5`}>${[1, 2, 3, 4, 5].map((i) => html`<span key=${i} class=${cx('h-3 w-3 rounded-full', i <= n ? (n <= 2 ? 'bg-warn' : 'bg-brand-600') : 'bg-canvas ring-1 ring-line')}></span>`)}</span>`;
 }
 
-export function Feedback({ call, onPractice, notify }) {
+export function Feedback({ call, onPractice, onRetry, onLevelUp, onPrep, notify }) {
   const fb = call.feedback;
   const client = CLIENTS.find((c) => c.id === call.clientId);
   const [tab, setTab] = useState('fb');
@@ -170,10 +178,30 @@ export function Feedback({ call, onPractice, notify }) {
   ];
   const tabs = [
     ['fb', 'העיקר'],
+    ['call', 'השיחה'],
     ['scores', 'הציונים'],
     ['hidden', `מה היה בראש של ${client.first}`],
     ['map', 'מפת השיחה'],
   ];
+  // "השיחה": the moment the fix is about, and the lines that worked, found in the transcript.
+  const norm = (t) => (t || '').replace(/\.\.\.$/, '').replace(/^["״]|["״]$/g, '').trim();
+  const what = norm(fb.fix?.what);
+  const isMine = (m, q) => m.who === 'me' && q.length > 6 && (m.text.startsWith(q) || m.text.includes(q.slice(0, 40)) || q.includes(m.text.slice(0, 40)));
+  const moment = what ? call.msgs.findIndex((m) => isMine(m, what)) : -1;
+  const good = new Set(fb.worked.map((w) => call.msgs.findIndex((m) => isMine(m, norm(w.quote)))).filter((i) => i >= 0 && i !== moment));
+  useEffect(() => {
+    if (tab !== 'call') return;
+    setTimeout(() => {
+      const el = document.getElementById('fb-moment');
+      const main = el?.closest('main');
+      if (el && main) main.scrollTo({ top: main.scrollTop + el.getBoundingClientRect().top - main.getBoundingClientRect().top - 90, behavior: 'smooth' });
+    }, 60);
+  }, [tab]);
+  // The next exercise: a single-stage drill where one exists, otherwise the same call again.
+  const drillable = !!STAGE_DRILL[fb.next.stageN];
+  // A strong call with few hints invites the next level with the same client.
+  const up = avg >= 4 && (call.hints || 0) <= 1 && fb.outcome !== 'lost' ? LEVELS.find((l) => l.id === call.level + 1) : null;
+  const hintsN = call.hints || 0;
   return html`<div class="mx-auto max-w-[820px] px-4 py-5 md:px-8 md:py-7">
     <div class="mb-4 flex items-start gap-4">
       <div class="min-w-0 flex-1">
@@ -197,6 +225,7 @@ export function Feedback({ call, onPractice, notify }) {
         <div class="mt-2 flex flex-wrap items-center gap-4">
           <button type="button" class="inline-flex items-center gap-1 text-[14px] font-bold text-brand-600 cursor-pointer" onClick=${() => notify('הניסוח הועתק', 'copy')}><${Icon} name="copy" size=${14} />העתקה</button>
           <button type="button" aria-expanded=${why} class="inline-flex items-center gap-1 text-[14px] font-bold text-muted hover:text-ink cursor-pointer" onClick=${() => setWhy(!why)}><${Icon} name=${why ? 'chevron-up' : 'chevron-down'} size=${15} />למה דווקא זה</button>
+          ${moment >= 0 && html`<button type="button" class="inline-flex items-center gap-1 text-[14px] font-bold text-muted hover:text-ink cursor-pointer" onClick=${() => setTab('call')}><${Icon} name="message-square-text" size=${14} />לראות בשיחה</button>`}
         </div>
         ${why && html`<div class="rise mt-3 flex flex-col gap-2.5 border-t border-line pt-3 text-[15px]">
           <p><b class="block text-[13px] text-muted">מה קרה</b>"${fb.fix.what}"</p>
@@ -206,9 +235,20 @@ export function Feedback({ call, onPractice, notify }) {
       <//>`}
       <section class="flex items-center gap-3 rounded-2xl bg-brand-600 p-4 text-white">
         <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15"><${Icon} name="repeat" size=${20} /></span>
-        <span class="min-w-0 flex-1"><b class="block text-[13px] opacity-80">התרגיל הבא · דקה-שתיים</b><span class="text-[15px]">${fb.next.text}</span></span>
-        <button type="button" class="shrink-0 rounded-xl bg-white px-4 py-2 text-[14px] font-bold text-brand-600 hover:bg-brand-50 cursor-pointer" onClick=${() => onPractice(fb.next.stageN)}>לתרגל עכשיו</button>
+        <span class="min-w-0 flex-1"><b class="block text-[13px] opacity-80">${drillable ? 'התרגיל הבא · דקה-שתיים' : `התרגיל הבא · עוד שיחה עם ${client.first}`}</b><span class="text-[15px]">${fb.next.text}</span></span>
+        <button type="button" class="shrink-0 rounded-xl bg-white px-4 py-2 text-[14px] font-bold text-brand-600 hover:bg-brand-50 cursor-pointer" onClick=${() => (drillable ? onPractice(fb.next.stageN) : onRetry())}>${drillable ? 'לתרגל עכשיו' : 'לשיחה חוזרת'}</button>
       </section>
+      ${hintsN > 0 && html`<p class="flex items-start gap-2 rounded-xl bg-brand-50 px-3.5 py-2.5 text-[15px]"><${Icon} name="lightbulb" size=${16} class="mt-0.5 shrink-0 text-brand-600" /><span>${hintsN === 1 ? 'נעזרת ברמז אחד בשיחה.' : `נעזרת ב-${hintsN} רמזים בשיחה.`} ${avg >= 4 ? (hintsN > 1 ? 'השיחה הבאה ברמה הזאת: עם רמז אחד לכל היותר, ואז עולים רמה.' : '') : 'בשביל זה הם שם. בשיחה הבאה, לנסות להגיע לאותו מקום עם פחות.'}</span></p>`}
+      ${up && html`<section class="rise flex flex-wrap items-center gap-3 rounded-2xl border-[1.5px] border-money bg-money-50 p-4">
+        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-money text-white"><${Icon} name="trending-up" size=${20} /></span>
+        <span class="min-w-[200px] flex-1"><b class="block text-[16px]">שיחה חזקה ברמה ${call.level}. ${g('מוכן', 'מוכנה')} לרמה ${up.id}?</b><span class="text-[14px] text-muted">שוב ${client.first}, והפעם ${client.fem ? UP_SUB[up.id][1] : UP_SUB[up.id][0]}.</span></span>
+        <button type="button" class="shrink-0 rounded-xl bg-money px-4 py-2 text-[14px] font-bold text-white hover:opacity-90 cursor-pointer" onClick=${onLevelUp}>לעלות לרמה ${up.id}</button>
+      </section>`}
+      ${client.real && html`<button type="button" onClick=${onPrep} class="flex items-center gap-3 rounded-2xl border-2 border-[#e6cd8e] bg-[#fdf8ea] p-4 text-start transition hover:border-[#a8701a] cursor-pointer">
+        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#a8701a] text-white"><${Icon} name="clipboard-list" size=${20} /></span>
+        <span class="min-w-0 flex-1"><b class="block text-[16px]">כרטיס הכנה לשיחה האמיתית עם ${client.first}</b><span class="text-[14px] text-muted">פתיחה, 3 שאלות, ההתנגדות הצפויה ומה לבקש בסוף. לפתוח 5 דקות לפני.</span></span>
+        <${Icon} name="chevron-left" size=${18} class="shrink-0 text-muted" />
+      </button>`}
       <section class="fb-panel !p-4">
         <h2 class="mb-2 text-[15px] font-bold">מה עבד</h2>
         ${fb.worked.length
@@ -222,6 +262,24 @@ export function Feedback({ call, onPractice, notify }) {
         ${more && html`<ul class="rise mt-2 list-disc space-y-1 ps-6 text-[15px]">${fb.more.map((m) => html`<li key=${m}>${m}</li>`)}</ul>`}
       </div>`}
     </div>`}
+
+    ${tab === 'call' &&
+    html`<section class="fb-panel !p-3 md:!p-4">
+      <p class="mb-3 text-[14px] text-muted">${moment >= 0 ? 'הרגע שבו השיחה נשברה מסומן, ולידו מה לומר במקומו.' : 'כל השיחה, כמו שהייתה.'}${good.size ? ' מה שעבד מסומן ב-✓.' : ''}</p>
+      <div class="flex flex-col gap-2.5">
+        ${call.msgs.map((m, i) =>
+          i === moment
+            ? html`<div key=${i} id="fb-moment" class="rounded-2xl border-[1.5px] border-warn bg-warn-50 p-2.5">
+                <p class="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-warn"><${Icon} name="flag" size=${14} />כאן זה נשבר · ${fb.fix.title.split(':')[0]}</p>
+                <${Bubble} m=${m} client=${client} />
+                <p class="mt-2.5 rounded-xl border-[1.5px] border-brand-200 bg-white px-3 py-2 text-[15px] font-semibold leading-relaxed"><b class="mb-0.5 block text-[12px] font-bold text-muted">לומר בפעם הבאה</b>${fb.fix.alt}</p>
+              </div>`
+            : good.has(i)
+              ? html`<div key=${i}><p class="mb-1 flex items-center justify-end gap-1 text-[12px] font-bold text-brand-600">✓ עבד</p><${Bubble} m=${m} client=${client} /></div>`
+              : html`<${Bubble} key=${i} m=${m} client=${client} />`,
+        )}
+      </div>
+    </section>`}
 
     ${tab === 'scores' &&
     html`<section class="fb-panel !p-0">

@@ -287,8 +287,9 @@ const FEEDBACK_SCHEMA = {
     },
     map: { type: 'object', properties: mapProps, required: Object.keys(mapProps), additionalProperties: false },
     next: { type: 'object', properties: { stageN: { type: 'integer' }, text: { type: 'string' } }, required: ['stageN', 'text'], additionalProperties: false },
+    sheet: { anyOf: [{ type: 'null' }, { type: 'object', properties: { answer: { type: 'string' }, short: { type: 'string' } }, required: ['answer', 'short'], additionalProperties: false }] },
   },
-  required: ['outcome', 'line', 'worked', 'fix', 'more', 'flags', 'scores', 'hiddenHits', 'map', 'next'],
+  required: ['outcome', 'line', 'worked', 'fix', 'more', 'flags', 'scores', 'hiddenHits', 'map', 'next', 'sheet'],
   additionalProperties: false,
 };
 
@@ -302,7 +303,9 @@ export async function feedback(call, ratio) {
       `outcome: התוצאה לפי 3.1 (buy, next, no, think). שיחה שנעצרה לפני החלטה היא think. התוצאה שנקבעה בשיחה: ${call.outcome || 'אין'}.`,
       'line: השורה האחת. worked: 2-3 דברים, עם ציטוט מדויק של המתאמן. fix: התיקון האחד לפי הכלל בסעיף 8, השלב השבור המוקדם ביותר (title קצר, what = ציטוט או תיאור הרגע, effect = מה זה עשה ללקוח, principle, alt = ניסוח חלופי מוכן, stageN = השלב בסעיף 4).',
       'more: עד 3. flags: דגלים אדומים מ-8.2 שקרו, ניסוח קצר. scores: 10 הממדים של 8.1 לפי הסדר, score 1-5 או null ל"לא הגיע" או "לא נדרש", why = משפט אחד.',
-      `hiddenHits: לכל פריט במצב הנסתר, true אם המתאמן גילה אותו, false אם פספס, null אם לא רלוונטי (למשל אין מקבל החלטות נוסף). fit = true אם המתאמן אמר בקול את ההתאמה הנכונה (המסלול הנכון, או שאין התאמה). map: לכל שלב s0-s15: done, partial, missing או early. next: התרגיל הבא (stageN = השלב לתרגל, text = הצעה מדויקת).`,
+      `hiddenHits: לכל פריט במצב הנסתר, true אם המתאמן גילה אותו, false אם פספס, null אם לא רלוונטי (למשל אין מקבל החלטות נוסף). fit = true אם המתאמן אמר בקול את ההתאמה הנכונה (המסלול הנכון, או שאין התאמה). map: לכל שלב s0-s15: done, partial, missing או early. next: התרגיל הבא (stageN = השלב לתרגל, text = הצעה מדויקת). לשלבים 8 ו-10 יש תרגול שלב בודד. לכל שלב אחר התרגיל הוא שוב אותה שיחה, וה-text מתחיל ב"שוב אותה שיחה, עם ${c.first}. הפעם:".`,
+      `sheet: התשובה של המתאמן להתנגדות של ${c.first} ("${c.hidden.objection}") בשיחה הזאת, במילים שלו, מסודרת קלות לשורה בדף התשובות: answer = התשובה המלאה (אפשר "(ואחרי שעונה:)" בין שני חלקים), short = גרסה קצרה לוואטסאפ, עד 110 תווים. בלי להמציא מה שהמתאמן לא אמר. null אם ההתנגדות לא עלתה, או שהתשובה לא עבדה (ויכוח, לחץ, הנחה, או שהלקוח לא השתכנע).`,
+      call.hints ? `המתאמן ביקש ${call.hints === 1 ? 'רמז אחד' : `${call.hints} רמזים`} במהלך השיחה. ציין את זה בשורה אחת ב-more, בלי להוריד ציונים בגלל זה.` : 'המתאמן לא ביקש רמזים בשיחה.',
       `יחס הדיבור שנמדד בקוד: ${c.first} ${ratio}% מהמילים.`,
       `כתוב בעברית, פנה למתאמן ${g('בלשון זכר', 'בלשון נקבה')}, ועל ${c.first} ${c.fem ? 'בלשון נקבה' : 'בלשון זכר'}.`,
     ].join('\n'),

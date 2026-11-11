@@ -15,6 +15,7 @@ import * as ai from './ai.js';
 import { hasAI } from './ai.js';
 import { Opening, Room, ContextSheet, Brief, Done } from './step.js';
 import { Call, Feedback, StageDrill } from './call.js';
+import { PrepSheet } from './sheet.js';
 import { Drill, Analysis } from './tools.js';
 import { AnswerSheet } from './sheet.js';
 import { DevPanel } from './devnotes.js';
@@ -76,6 +77,7 @@ function App({ view: shellView, onViewChange }) {
   const [dev, setDev] = useState(false);
   const [unread, setUnread] = useState(true);
   const [busy, setBusy] = useState(null); // 'hint' | 'feedback' while the model works
+  const [prepFor, setPrepFor] = useState(null); // a real client's id: the prep card is open
   const timers = useRef({});
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -122,8 +124,9 @@ function App({ view: shellView, onViewChange }) {
   const go = (r) => setRoute(r);
 
   // ---------- calls ----------
-  const startCall = (clientId, lvl = level) => {
-    const c = { ...newCall(clientId, lvl), id: nextId() };
+  // focus: what this call is about, when it repeats a call to work on the one fix.
+  const startCall = (clientId, lvl = level, focus) => {
+    const c = { ...newCall(clientId, lvl), id: nextId(), ...(focus ? { focus } : {}) };
     setState((s) => ({ ...s, calls: [...s.calls, c] }));
     go({ screen: 'call', callId: c.id });
   };
@@ -231,10 +234,23 @@ function App({ view: shellView, onViewChange }) {
     if (cur.sample) {
       applySample();
       setTimeout(() => notify('התשובה להתנגדות הזהב עודכנה בדף, במילים שלך', 'file-pen'), 600);
+    } else if (fb.sheet?.answer) {
+      // Any call where the objection was handled rewrites that row in the user's words.
+      const cl = CLIENTS.find((x) => x.id === cur.clientId);
+      const row = stateRef.current.sheet.find((r) => r.form === cl.form);
+      if (row) {
+        setRow(row.id, { answer: fb.sheet.answer, short: fb.sheet.short || row.short, src: `מהשיחה עם ${cl.first} · במילים שלך`, mine: true });
+        setTimeout(() => notify(`התשובה ל"${row.said}" עודכנה בדף, במילים שלך`, 'file-pen'), 600);
+      }
     }
     go({ screen: 'feedback', callId: cur.id });
   };
-  const retry = () => startCall(call.clientId, call.level);
+  // After feedback, another call with the same client works on the one fix.
+  const retry = () => startCall(call.clientId, call.level, call.feedback?.fix?.principle || call.focus);
+  const levelUp = () => {
+    setLevel(call.level + 1);
+    startCall(call.clientId, call.level + 1);
+  };
 
   // "לקוח אמיתי שלך": with a key the model builds the hidden state from the description;
   // without one (or if the call fails), the description alone is used.
@@ -332,9 +348,9 @@ function App({ view: shellView, onViewChange }) {
       onContext=${() => setCtxOpen(true)}
       onSheet=${() => go({ screen: 'sheet' })}
     />`,
-    brief: client && html`<${Brief} client=${client} level=${level} setLevel=${setLevel} />`,
+    brief: client && html`<${Brief} client=${client} level=${level} setLevel=${setLevel} onPrep=${() => setPrepFor(client.id)} />`,
     call: call && html`<${Call} key=${call.id} call=${call} busy=${busy} onSend=${send} onHint=${hint} onSample=${playSample} />`,
-    feedback: call?.feedback && html`<${Feedback} key=${call.id} call=${call} notify=${notify} onPractice=${(n) => go({ screen: 'stage', stageN: n, clientId: call.clientId, callId: call.id })} />`,
+    feedback: call?.feedback && html`<${Feedback} key=${call.id} call=${call} notify=${notify} onPractice=${(n) => go({ screen: 'stage', stageN: n, clientId: call.clientId, callId: call.id })} onRetry=${retry} onLevelUp=${levelUp} onPrep=${() => setPrepFor(call.clientId)} />`,
     stage: html`<${StageDrill} stageN=${route.stageN} clientId=${route.clientId} onDone=${() => (call?.feedback ? go({ screen: 'feedback', callId: route.callId }) : go({ screen: 'room' }))} />`,
     drill: html`<${Drill} sheet=${state.sheet} onFinish=${() => (patch({ drill: { done: (state.drill?.done || 0) + 1 } }), go({ screen: 'room' }))} />`,
     analysis: html`<${Analysis} notify=${notify} />`,
@@ -352,6 +368,7 @@ function App({ view: shellView, onViewChange }) {
     ${bottom}
     <${Toast} toast=${toast} />
     ${ctxOpen && html`<${ContextSheet} onClose=${() => setCtxOpen(false)} />`}
+    ${prepFor && CLIENTS.some((c) => c.id === prepFor) && html`<${PrepSheet} client=${CLIENTS.find((c) => c.id === prepFor)} sheet=${state.sheet} calls=${state.calls} notify=${notify} onClose=${() => setPrepFor(null)} />`}
     <${DevPanel} open=${dev} onClose=${() => setDev(false)} onJump=${jump} onReset=${reset} notify=${notify} />
   </div>`;
 }
