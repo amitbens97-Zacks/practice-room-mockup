@@ -2,18 +2,26 @@
 // Each row: what the client said, the worry behind it, an answer and a short WhatsApp
 // version. It starts from the client file, the offer and the audience's common objections;
 // after every call the rows that came up are rewritten in the user's own words.
+// The user can add an objection they heard, and the system suggests the row for it.
 import { html, useState, Icon, cx, money } from './lib.js';
 import { Button, InlineEdit, Note } from './components.js';
 import { Sheet, Tag } from './ui.js';
-import { FORMS, CONTEXT, g } from './data.js';
+import { FORMS, CONTEXT, g, suggestLocal } from './data.js';
+import { hasAI, suggestAnswer } from './ai.js';
+
+const joinAnswer = (r) => `${r.ask} ${r.reply} ${r.close}`;
 
 // One objection: what they said and the answer. The worry and the WhatsApp version open on demand.
-function Row({ r, setRow, notify }) {
+function Row({ r, setRow, onRemove, fresh, notify }) {
   const [open, setOpen] = useState(false);
-  return html`<article class=${cx('fb-panel !p-4', r.mine && 'ring-2 ring-brand-300')}>
+  return html`<article id=${`row-${r.id}`} class=${cx('fb-panel !p-4', r.mine && 'ring-2 ring-brand-300', fresh && 'rise ring-2 ring-money')}>
     <div class="mb-1.5 flex items-start justify-between gap-2">
       <b class="font-display text-[18px] leading-snug">"${r.said}"</b>
-      ${r.mine && html`<${Tag} tone="blue"><${Icon} name="pencil" size=${12} />במילים שלך<//>`}
+      <span class="flex shrink-0 items-center gap-1">
+        ${r.mine && html`<${Tag} tone="blue"><${Icon} name="pencil" size=${12} />במילים שלך<//>`}
+        ${r.added && html`<${Tag} tone="live"><${Icon} name="plus" size=${12} />הוספת<//>`}
+        ${r.added && html`<button type="button" aria-label="הסרה מהדף" class="rounded p-1 text-faint hover:bg-error-50 hover:text-error cursor-pointer" onClick=${() => onRemove(r.id)}><${Icon} name="x" size=${15} /></button>`}
+      </span>
     </div>
     <div class="text-[16px] leading-relaxed"><${InlineEdit} multiline value=${r.answer} onSave=${(v) => setRow(r.id, { answer: v, edited: true })} /></div>
     <button type="button" aria-expanded=${open} class="mt-2 inline-flex items-center gap-1 text-[13px] font-bold text-muted hover:text-ink cursor-pointer" onClick=${() => setOpen(!open)}><${Icon} name=${open ? 'chevron-up' : 'chevron-down'} size=${14} />הדאגה שמאחור וגרסה לוואטסאפ</button>
@@ -28,8 +36,120 @@ function Row({ r, setRow, notify }) {
   </article>`;
 }
 
-export function AnswerSheet({ sheet, setRow, notify, onScript }) {
+// "התנגדות חדשה": what the client said (and when, optional), and the system suggests a row
+// in the sheet's three steps. With a key Claude writes it from the prompt and the context
+// block; without one the mockup answers from patterns built on the same block. Every part of
+// the suggestion can be edited, and its form changed, before it goes on the sheet.
+const EXAMPLES = ['אני אנסה קודם לבד', 'יש לך לקוחות שעשו את זה?', 'אחרי החגים נדבר', 'קיבלתי הצעה יותר זולה'];
+const SUGGEST_STEPS = [
+  ['ask', 'שואלים', 'מה באמת מדאיג'],
+  ['reply', 'עונים', 'על הדאגה, עם ההצעה'],
+  ['close', 'סוגרים', 'לולאה, ורק אז מבקשים שוב'],
+];
+
+function NewObjection({ sheet, onAdd, onClose }) {
+  const [said, setSaid] = useState('');
+  const [when, setWhen] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [s, setS] = useState(null);
+  const [v, setV] = useState(0);
+  const [note, setNote] = useState('');
+  const ai = hasAI();
+  const ta = 'w-full resize-none rounded-xl border-[1.5px] border-line bg-white px-3 py-2.5 text-[16px] text-ink outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100';
+  const run = async (again) => {
+    const text = said.trim().replace(/^["״]|["״]$/g, '');
+    if (!text || busy) return;
+    setBusy(true);
+    setNote('');
+    try {
+      const out = ai
+        ? { ...(await suggestAnswer({ said: text, when: when.trim(), sheet, before: again ? s : null })), src: 'הוספת · הצעה של המערכת' }
+        : (await new Promise((r) => setTimeout(r, 650)), suggestLocal(text));
+      setS({ ...out, said: text });
+    } catch (e) {
+      setNote(e?.status === 401 ? 'המפתח לא התקבל, אז ההצעה נבנתה מהדף.' : 'Claude לא ענה הפעם, אז ההצעה נבנתה מהדף.');
+      setS({ ...suggestLocal(text), said: text });
+    }
+    setV((x) => x + 1);
+    setBusy(false);
+  };
+  const edit = (k) => (val) => setS((x) => ({ ...x, [k]: val }));
+  const add = () => onAdd({ ...s, id: `u${Date.now()}`, added: true, answer: joinAnswer(s) });
+  const form = s && FORMS.find((f) => f.id === s.form);
+  return html`<section class="rise fb-panel mb-5 !p-4 ring-2 ring-brand-300 md:!p-5" aria-label="התנגדות חדשה">
+    <div class="mb-3 flex items-start justify-between gap-2">
+      <div>
+        <h2 class="font-display text-[20px] font-bold">התנגדות חדשה</h2>
+        <p class="text-[14px] text-muted">${g('כתוב', 'כתבי')} מה הלקוח אמר, והמערכת תציע תשובה מההצעה וכללי המחיר שלך.</p>
+      </div>
+      <button type="button" aria-label="סגירה" class="rounded-lg p-1.5 text-muted hover:bg-canvas hover:text-ink cursor-pointer" onClick=${onClose}><${Icon} name="x" size=${18} /></button>
+    </div>
+    <label class="mb-1 block text-[14px] font-bold" for="new-said">מה הלקוח אמר?</label>
+    <textarea id="new-said" rows="2" class=${ta} value=${said} onInput=${(e) => setSaid(e.target.value)} onKeyDown=${(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), run())} placeholder='כמו שזה נשמע, למשל: "יש לי כבר מישהו שעושה לי פייסבוק"'></textarea>
+    ${!s && html`<div class="mt-2 flex flex-wrap gap-1.5">
+      ${EXAMPLES.map((x) => html`<button key=${x} type="button" class="rounded-full border border-line bg-white px-2.5 py-1 text-[13px] text-muted hover:border-brand-300 hover:text-ink cursor-pointer" onClick=${() => setSaid(x)}>"${x}"</button>`)}
+    </div>`}
+    <label class="mb-1 mt-3 block text-[14px] font-bold" for="new-when">מתי זה עלה? <span class="font-normal text-faint">לא חובה</span></label>
+    <input id="new-when" class=${cx(ta, 'h-11 py-0')} value=${when} onInput=${(e) => setWhen(e.target.value)} placeholder="למשל: מיד אחרי שאמרתי את המחיר" />
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <${Button} disabled=${!said.trim() || busy} onClick=${() => run(false)}>
+        ${busy ? html`<span class="fb-spin" style=${{ width: 16, height: 16 }}></span>כותב תשובה...` : html`<${Icon} name="sparkles" size=${16} />${s ? 'להציע מחדש' : 'להציע תשובה'}`}
+      <//>
+      ${s && ai && !busy && html`<${Button} variant="quiet" onClick=${() => run(true)}><${Icon} name="refresh-cw" size=${15} />גישה אחרת<//>`}
+    </div>
+    ${note && html`<p class="mt-2 text-[13px] text-warn">${note}</p>`}
+    ${s && !busy && html`<div key=${v} class="rise mt-4 border-t border-line pt-4">
+      <div class="mb-3 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="סוג ההתנגדות">
+        <span class="text-[13px] font-bold text-muted">סוג:</span>
+        ${FORMS.map((f) => html`<button key=${f.id} type="button" role="radio" aria-checked=${s.form === f.id} onClick=${() => edit('form')(f.id)} class=${cx('inline-flex h-8 items-center gap-1 rounded-lg border-[1.5px] px-2.5 text-[13px] font-bold cursor-pointer', s.form === f.id ? 'border-brand-600 bg-brand-100 text-brand-600' : 'border-line bg-white text-muted hover:border-brand-300')}><${Icon} name=${f.icon} size=${13} />${f.label}</button>`)}
+      </div>
+      <p class="mb-3 text-[15px]"><b>מה מדאיג אותו:</b> <${InlineEdit} value=${s.worry} onSave=${edit('worry')} /></p>
+      <ol class="flex flex-col gap-2.5">
+        ${SUGGEST_STEPS.map(([k, label, why], i) => html`<li key=${k} class="flex items-start gap-2.5">
+          <span class="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-600 text-[12px] font-bold text-white">${i + 1}</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[13px] font-bold text-brand-600">${label} <span class="font-normal text-faint">· ${why}</span></div>
+            <div class="text-[16px] leading-relaxed"><${InlineEdit} multiline value=${s[k]} onSave=${edit(k)} /></div>
+          </div>
+        </li>`)}
+      </ol>
+      <div class="mt-3 flex items-start gap-2 rounded-xl bg-warn-50 px-3 py-2 text-[14px]">
+        <span class="mt-0.5 text-warn"><${Icon} name="scale" size=${15} /></span>
+        <span class="min-w-0 flex-1"><b>כשזה אמיתי:</b> <${InlineEdit} multiline value=${s.honest} onSave=${edit('honest')} /></span>
+      </div>
+      <div class="mt-2 flex items-start gap-2 rounded-xl bg-[#e7f6e9] px-3 py-2 text-[14px]">
+        <span class="mt-0.5 text-[#128c4a]"><${Icon} name="message-circle" size=${15} /></span>
+        <span class="min-w-0 flex-1"><${InlineEdit} multiline value=${s.short} onSave=${edit('short')} /></span>
+      </div>
+      <p class="mt-2 text-[13px] text-faint">${s.src}. כל חלק נערך בלחיצה.</p>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <${Button} onClick=${add}><${Icon} name="plus" size=${16} />להוסיף לדף, תחת ${form?.label}<//>
+        <${Button} variant="quiet" onClick=${onClose}>ביטול<//>
+      </div>
+    </div>`}
+  </section>`;
+}
+
+export function AnswerSheet({ sheet, setRow, addRow, removeRow, notify, onScript }) {
   const [form, setForm] = useState('all');
+  const [adding, setAdding] = useState(false);
+  const [fresh, setFresh] = useState(null);
+  const onAdd = (row) => {
+    addRow(row);
+    setAdding(false);
+    setForm('all');
+    setFresh(row.id);
+    notify('נוסף לדף ולתסריט', 'check');
+    setTimeout(() => {
+      const el = document.getElementById(`row-${row.id}`);
+      const main = document.querySelector('main');
+      if (el && main) main.scrollTo({ top: main.scrollTop + el.getBoundingClientRect().top - main.getBoundingClientRect().top - 120 });
+    }, 120);
+  };
+  const onRemove = (id) => {
+    removeRow(id);
+    notify('הוסר מהדף', 'trash-2');
+  };
   const rows = sheet.filter((r) => form === 'all' || r.form === form);
   const groups = FORMS.filter((f) => rows.some((r) => r.form === f.id));
   return html`<div class="mx-auto max-w-[820px] px-4 py-6 md:px-8 md:py-8">
@@ -38,11 +158,13 @@ export function AnswerSheet({ sheet, setRow, notify, onScript }) {
                 <h1 class="fb-h1 text-[26px] md:text-[32px]">דף <span class="fb-marker">תשובות להתנגדויות</span></h1>
         <p class="mt-1 text-[16px] text-muted">התוצר של השלב. מה שעלה בשיחה נכתב מחדש במילים שלך.</p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
+        ${!adding && html`<${Button} variant="mini" onClick=${() => setAdding(true)}><${Icon} name="plus" size=${15} />התנגדות חדשה<//>`}
         <${Button} variant="mini" onClick=${onScript}><${Icon} name="scroll-text" size=${15} />התסריט שלך<//>
         <${Button} variant="mini" onClick=${() => notify('ה-PDF ירד, ונשמר בקבצים › מגדילים מכירות', 'download')}><${Icon} name="download" size=${15} />הורדה<//>
       </div>
     </div>
+    ${adding && html`<${NewObjection} sheet=${sheet} onAdd=${onAdd} onClose=${() => setAdding(false)} />`}
     <div class="mb-5 flex flex-wrap gap-1.5" role="radiogroup" aria-label="סינון לפי סוג">
       ${[{ id: 'all', label: `הכל (${sheet.length})` }, ...FORMS.map((f) => ({ id: f.id, label: `${f.label} (${sheet.filter((r) => r.form === f.id).length})`, icon: f.icon }))].map(
         (o) => html`<button key=${o.id} type="button" role="radio" aria-checked=${form === o.id} onClick=${() => setForm(o.id)} class=${cx('inline-flex h-9 items-center gap-1.5 rounded-xl border-[1.5px] px-3 text-[14px] font-bold cursor-pointer', form === o.id ? 'border-brand-600 bg-brand-100 text-brand-600' : 'border-line bg-white hover:border-brand-300')}>${o.icon && html`<${Icon} name=${o.icon} size=${14} />`}${o.label}</button>`,
@@ -53,7 +175,7 @@ export function AnswerSheet({ sheet, setRow, notify, onScript }) {
         <h2 class="mb-2 flex items-center gap-2 text-[15px] font-bold text-muted"><${Icon} name=${f.icon} size=${16} class="text-brand-600" />${f.label}</h2>
         <div class="flex flex-col gap-2.5">
           ${rows.filter((r) => r.form === f.id).map(
-            (r) => html`<${Row} key=${r.id} r=${r} setRow=${setRow} notify=${notify} />`,
+            (r) => html`<${Row} key=${r.id} r=${r} setRow=${setRow} onRemove=${onRemove} fresh=${fresh === r.id} notify=${notify} />`,
           )}
         </div>
       </section>`,

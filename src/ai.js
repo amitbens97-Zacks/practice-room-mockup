@@ -329,3 +329,44 @@ export async function feedback(call, ratio) {
     ai: true,
   };
 }
+
+// ---------- "להוסיף התנגדות": a new row for the answer sheet ----------
+const ROW_SCHEMA = {
+  type: 'object',
+  properties: {
+    form: { type: 'string', enum: ['time', 'money', 'fit', 'authority', 'avoid'], description: 'הצורה לפי סעיף 3.13' },
+    worry: { type: 'string', description: 'הדאגה שמאחורי המשפט, שורה אחת בגוף שלישי' },
+    ask: { type: 'string', description: 'שואלים: שאלה אחת או שתיים שמבררות מה באמת מדאיג' },
+    reply: { type: 'string', description: 'עונים: על הדאגה, עם ההצעה שבבלוק בלבד' },
+    close: { type: 'string', description: 'סוגרים: לולאה ("זה פותר לך את זה?"), ורק אז בקשה לצעד הבא' },
+    honest: { type: 'string', description: 'כשזה אמיתי: מה עושים אם זו סיבה ולא תירוץ' },
+    short: { type: 'string', description: 'גרסה קצרה לוואטסאפ, עד 30 מילים' },
+  },
+  required: ['form', 'worry', 'ask', 'reply', 'close', 'honest', 'short'],
+  additionalProperties: false,
+};
+
+const rowText = (r) => `"${r.said}" (${r.form})\nשואלים: ${r.ask}\nעונים: ${r.reply}\nסוגרים: ${r.close}\nכשזה אמיתי: ${r.honest}`;
+
+// said: what the client said. when: when it came up (optional). sheet: the rows already on
+// the page, for tone and so the new one doesn't repeat them. before: a suggestion to replace.
+export async function suggestAnswer({ said, when, sheet, before }) {
+  const system = [
+    'מצב פעיל: כתיבת שורה לדף התשובות להתנגדויות. אל תשחק דמות ואל תציג את התפריט.',
+    trainee(),
+    [
+      'המתאמן הוסיף התנגדות ששמע מלקוח, ורוצה תשובה מוכנה לשיחה הבאה. כתוב אותה לפי סעיף 3 בפרומפט וחמש הצורות שבו, ולפי בלוק ההקשר:',
+      '- מסווגים לצורה אחת: time, money, fit, authority, avoid.',
+      '- שואלים לפני שעונים: מה באמת מדאיג. לא מתווכחים עם המשפט.',
+      '- עונים רק עם מה שיש בבלוק: המסלולים והמחירים, 3 התשלומים, הערבות, הבונוס והניסיון של המתאמן. לא ממציאים לקוחות, תוצאות, הנחות או דחיפות.',
+      '- לא מורידים מחיר. מסלול קטן מציעים רק אם הוא באמת פותר את מה שהלקוח צריך.',
+      '- סוגרים בלולאה, ורק אז מבקשים צעד הבא.',
+      '- honest: מה עושים כשזו סיבה אמיתית: הפניה, פרידה יפה, או מועד מדויק לחזור.',
+      '- עברית מדוברת, משפטים קצרים, כמו שהמתאמן היה אומר בשיחה. הוראות במה בסוגריים, כמו "(ואחרי שעונה:)". פונים ללקוח בלשון זכר. בלי מקפים ארוכים.',
+    ].join('\n'),
+    `השורות שכבר בדף (לטון ולמבנה, ולא לחזור עליהן):\n${sheet.slice(0, 7).map(rowText).join('\n\n')}`,
+    before ? `הצעה קודמת שהמתאמן ביקש להחליף. כתוב גישה אחרת:\n${rowText({ said, ...before })}` : '',
+  ].filter(Boolean).join('\n\n');
+  const content = `ההתנגדות: "${said}"${when ? `\nמתי זה עלה: ${when}` : ''}`;
+  return ask({ system, messages: [{ role: 'user', content }], schema: ROW_SCHEMA, effort: 'medium', maxTokens: 6000 });
+}

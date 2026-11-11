@@ -121,6 +121,8 @@ function App({ view: shellView, onViewChange }) {
   const patch = (p) => setState((s) => ({ ...s, ...p }));
   const setCall = (id, p) => setState((s) => ({ ...s, calls: s.calls.map((c) => (c.id === id ? { ...c, ...(typeof p === 'function' ? p(c) : p) } : c)) }));
   const setRow = (id, p) => setState((s) => ({ ...s, sheet: s.sheet.map((r) => (r.id === id ? { ...r, ...p } : r)) }));
+  const addRow = (row) => setState((s) => ({ ...s, sheet: [...s.sheet, row] }));
+  const removeRow = (id) => setState((s) => ({ ...s, sheet: s.sheet.filter((r) => r.id !== id) }));
   const go = (r) => setRoute(r);
 
   // ---------- calls ----------
@@ -355,7 +357,7 @@ function App({ view: shellView, onViewChange }) {
     stage: html`<${StageDrill} stageN=${route.stageN} clientId=${route.clientId} onDone=${() => (call?.feedback ? go({ screen: 'feedback', callId: route.callId }) : go({ screen: 'room' }))} />`,
     drill: html`<${Drill} sheet=${state.sheet} onFinish=${() => (patch({ drill: { done: (state.drill?.done || 0) + 1 } }), go({ screen: 'room' }))} />`,
     analysis: html`<${Analysis} notify=${notify} />`,
-    sheet: html`<${AnswerSheet} sheet=${state.sheet} setRow=${setRow} notify=${notify} onScript=${() => go({ screen: 'script' })} />`,
+    sheet: html`<${AnswerSheet} sheet=${state.sheet} setRow=${setRow} addRow=${addRow} removeRow=${removeRow} notify=${notify} onScript=${() => go({ screen: 'script' })} />`,
     script: html`<${CallScript} state=${state} setScript=${(p) => setState((s) => ({ ...s, script: { ...(s.script || { edits: {}, added: {} }), ...p } }))} notify=${notify} onSheet=${() => go({ screen: 'sheet' })} />`,
     done: html`<${Done} state=${state} onScript=${() => go({ screen: 'script' })} />`,
   }[screen];
