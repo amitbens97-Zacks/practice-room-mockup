@@ -1,7 +1,7 @@
 // Task 7: step 12 "חדר התרגול", built on the sales coach system prompt
 // (Meetings_Summary/practice-room/sales-coach-prompt.md).
-// Screens: opening → room (three clients, the quick round, the analysis, the answer
-// sheet) → brief → call → feedback → (single-stage practice) → answer sheet → done.
+// Screens: opening → room (three clients, "לקוח חדש" for more, the quick round, the
+// analysis, the answer sheet) → brief → call → feedback → (single-stage practice) → answer sheet → done.
 // There is no model in the mockup: coach.js plays the client by the rules of prompt 5.3
 // and builds the feedback from what happened. The sample call with רונית and its
 // feedback are written in advance, to show a full feedback.
@@ -25,7 +25,7 @@ const KEY = 'flowbiz-pr-state';
 const SCREENS = ['opening', 'room', 'brief', 'call', 'feedback', 'stage', 'drill', 'analysis', 'sheet', 'done'];
 const PART_OF = { room: 0, brief: 0, drill: 0, analysis: 0, call: 1, feedback: 2, stage: 2, sheet: 3 };
 
-const freshState = () => ({ calls: [], sheet: SHEET.map((r) => ({ ...r })), drill: { done: 0 }, done: false });
+const freshState = () => ({ calls: [], added: [], sheet: SHEET.map((r) => ({ ...r })), drill: { done: 0 }, done: false });
 // The mockup always opens the step from zero: no calls, no "מהפעם הקודמת".
 // Progress lives only while the page is open (and across the phone/desktop switch).
 function loadState() {
@@ -308,6 +308,8 @@ function App({ view: shellView, onViewChange }) {
     room: html`<${Room}
       state=${state}
       onPick=${(id) => go({ screen: 'brief', clientId: id })}
+      onAdd=${(id) => setState((s) => ({ ...s, added: [...(s.added || []), id] }))}
+      onMore=${() => notify('במערכת: לקוח חדש בכל לחיצה, שהמודל בונה מתיק הלקוח. במוק-אפ יש ארבעה נוספים', 'user-plus')}
       onResume=${(c) => (STAGE_DRILL[c.feedback.next?.stageN] ? go({ screen: 'stage', stageN: c.feedback.next.stageN, clientId: c.clientId, callId: c.id }) : go({ screen: 'brief', clientId: c.clientId }))}
       onTool=${(t) => go({ screen: t })}
       onContext=${() => setCtxOpen(true)}

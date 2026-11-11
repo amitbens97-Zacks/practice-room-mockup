@@ -141,7 +141,7 @@ const TURN_SCHEMA = {
   properties: {
     reply: { type: 'string', description: 'מה הלקוח אומר עכשיו, בעברית מדוברת, עם הערות במה בסוגריים כשהן משנות משהו' },
     stage: { type: 'integer', description: 'השלב בסעיף 4 (0-15) שהשיחה הגיעה אליו בהודעה האחרונה של המתאמן' },
-    outcome: { type: 'string', enum: ['none', 'buy', 'next', 'no', 'think'] },
+    outcome: { type: 'string', enum: ['none', 'buy', 'next', 'no', 'lost', 'think'] },
   },
   required: ['reply', 'stage', 'outcome'],
   additionalProperties: false,
@@ -154,7 +154,7 @@ export async function clientTurn(call) {
     trainee(),
     persona(c, call.level),
     `ענה רק כלקוח, לפי 5.3 ו-5.4. בשדה stage: מספר השלב שהמתאמן הגיע אליו (${STAGE_LIST}).`,
-    'בשדה outcome: none כל עוד אין החלטה. buy אם הדמות קנתה, next אם נקבע צעד הבא מוגדר (מועד, שליחת הצעה ושיחה נוספת), no אם הדמות סירבה או שנפרדתם (גם פרידה יפה כשאין התאמה), think אם הדמות דחתה ל"צריך לחשוב" ומסיימת את השיחה.',
+    'בשדה outcome: none כל עוד אין החלטה. buy אם הדמות קנתה, next אם נקבע צעד הבא מוגדר (מועד, שליחת הצעה ושיחה נוספת), no אם הדמות סירבה בצדק או שנפרדתם (גם פרידה יפה כשאין התאמה), lost אם הדמות סירבה כי המתאמן המשיך לדחוף אחרי שהתברר שאין התאמה, think אם הדמות דחתה ל"צריך לחשוב" ומסיימת את השיחה.',
   ].join('\n\n');
   const out = await ask({ system, messages: history(call), schema: TURN_SCHEMA, effort: 'low' });
   return { reply: out.reply, stage: Math.max(0, Math.min(15, out.stage | 0)), outcome: out.outcome === 'none' ? null : out.outcome };
@@ -201,7 +201,7 @@ const mapProps = Object.fromEntries(STAGES.map((s) => [`s${s.n}`, { type: 'strin
 const FEEDBACK_SCHEMA = {
   type: 'object',
   properties: {
-    outcome: { type: 'string', enum: ['buy', 'next', 'no', 'think'] },
+    outcome: { type: 'string', enum: ['buy', 'next', 'no', 'lost', 'think'] },
     line: { type: 'string' },
     worked: { type: 'array', items: { type: 'object', properties: { quote: { type: 'string' }, did: { type: 'string' } }, required: ['quote', 'did'], additionalProperties: false } },
     fix: {

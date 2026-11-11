@@ -1,10 +1,10 @@
 // Step 12 "חדר התרגול": the opening, the room (who do we practise with today), the brief
 // before a call, and the finish. The call, the feedback and the tools are in call.js and
 // tools.js; the answer sheet is in sheet.js.
-import { html, useEffect, Icon, cx, confetti, money, PencilLine } from './lib.js';
+import { html, useState, useEffect, Icon, cx, confetti, money, PencilLine } from './lib.js';
 import { Button, Note, StepHeading, SharkAvatar } from './components.js';
 import { Sheet, Tag } from './ui.js';
-import { USER, CLIENTS, CONTEXT, CLIENT_FILE, FORMS, LEVELS, GROUPS, STAGES, PARTS, g } from './data.js';
+import { USER, CLIENTS, POOL_CLIENTS, CONTEXT, CLIENT_FILE, FORMS, LEVELS, GROUPS, STAGES, PARTS, g } from './data.js';
 
 export const formOf = (id) => FORMS.find((f) => f.id === id);
 export const OUTCOME = {
@@ -12,11 +12,12 @@ export const OUTCOME = {
   next: { label: 'צעד הבא נקבע', icon: 'calendar-check', tone: 'blue' },
   no: { label: 'סירב בצדק, ונפרדתם יפה', icon: 'hand', tone: 'blue' },
   think: { label: '"צריך לחשוב"', icon: 'hourglass', tone: 'draft' },
+  lost: { label: 'סירב אחרי לחץ', icon: 'circle-x', tone: 'draft' },
 };
-export const outcomeLabel = (o, c) => (o === 'buy' ? (c?.fem ? 'קנתה' : 'קנה') : o === 'no' ? (c?.fem ? 'סירבה בצדק, ונפרדתם יפה' : 'סירב בצדק, ונפרדתם יפה') : OUTCOME[o]?.label);
+export const outcomeLabel = (o, c) => (o === 'buy' ? (c?.fem ? 'קנתה' : 'קנה') : o === 'lost' ? (c?.fem ? 'סירבה אחרי לחץ' : 'סירב אחרי לחץ') : o === 'no' ? (c?.fem ? 'סירבה בצדק, ונפרדתם יפה' : 'סירב בצדק, ונפרדתם יפה') : OUTCOME[o]?.label);
 
 export function Avatar({ client, size = 44 }) {
-  const tint = { ronit: '#dde9fc', avi: '#e9effb', michal: '#eef3fd' }[client.id];
+  const tint = client.tint || '#e9effb';
   return html`<span class="grid shrink-0 place-items-center rounded-full font-display font-black text-brand-600 ring-2 ring-white" style=${{ width: size, height: size, background: tint, fontSize: size * 0.42, boxShadow: '0 0 0 2px #8fb3ef' }}>${client.first[0]}</span>`;
 }
 
@@ -25,7 +26,7 @@ export function Opening() {
   return html`<div class="mx-auto grid max-w-[1120px] items-center gap-8 px-4 py-6 md:grid-cols-[1.1fr_0.9fr] md:gap-12 md:px-8 md:py-8">
     <div>
       <${StepHeading} n="12" eyebrow="שלב 12 · מגדילים מכירות" title=${['מתאמנים על השיחה, לפני ', 'הלקוח הבא', '']} />
-      <p class="mb-6 max-w-[50ch] text-[18px] text-ink">שלושה לקוחות שנבנו מתיק הלקוח, מהסל ומההצעה שלך. ${g('מנהל', 'מנהלת')} מולם שיחת מכירה מלאה, ובסוף ${g('מקבל', 'מקבלת')} משוב מדויק: מה עבד, התיקון האחד, וניסוח שאפשר להגיד כבר בשיחה הבאה.</p>
+      <p class="mb-6 max-w-[50ch] text-[18px] text-ink">לקוחות שנבנים מתיק הלקוח, מהסל ומההצעה שלך, וכשנגמרים מוסיפים עוד. ${g('מנהל', 'מנהלת')} מולם שיחת מכירה מלאה, ובסוף ${g('מקבל', 'מקבלת')} משוב מדויק: מה עבד, התיקון האחד, וניסוח שאפשר להגיד כבר בשיחה הבאה.</p>
       <div class="flex flex-col gap-2 border-t border-line pt-4 text-[15px]">
         <p class="flex flex-wrap items-center gap-x-2 gap-y-1"><${Icon} name="list" size=${17} class="text-brand-600" /><b>החלקים:</b> ${PARTS.join(' · ')}</p>
         <p class="flex items-center gap-2"><${Icon} name="clock" size=${17} class="text-brand-600" /><b>זמן:</b> כ-20 דקות לשיחה</p>
@@ -51,46 +52,103 @@ export function Opening() {
 }
 
 // ---------- the room: who do we practise with today ----------
-// One thing to do: pick a client. The recommended one is marked; the tools sit quietly below.
-export function Room({ state, onPick, onResume, onTool, onContext, onSheet }) {
-  const lastByClient = (id) => [...state.calls].reverse().find((c) => c.clientId === id);
-  const lastFix = [...state.calls].reverse().find((c) => c.feedback?.fix);
-  const doneIds = new Set(state.calls.filter((c) => c.feedback).map((c) => c.clientId));
-  const next = CLIENTS.find((c) => !doneIds.has(c.id))?.id;
-  return html`<div class="mx-auto max-w-[980px] px-4 py-6 md:px-8 md:py-8">
-    <h1 class="fb-h1 mb-1 text-[28px] md:text-[34px]">עם מי <span class="fb-marker">מתאמנים</span> היום?</h1>
-    <p class="mb-6 text-[17px] text-muted">${g('בחר', 'בחרי')} לקוח. שיחה אחת עם משוב מספיקה כדי לסיים את השלב.</p>
+// One thing to do: pick a client. The recommended one is marked. "לקוח חדש" adds one more
+// client from the client file, so the practice does not run out after three calls. Each card
+// shows the levels already practised with that client, to invite a harder round.
+// The tools sit quietly at the bottom.
+export function Room({ state, onPick, onAdd, onMore, onResume, onTool, onContext, onSheet }) {
+  const [building, setBuilding] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const added = state.added || [];
+  const shown = CLIENTS.filter((c) => !c.pool || added.includes(c.id));
+  const left = POOL_CLIENTS.filter((c) => !added.includes(c.id));
+  const done = state.calls.filter((c) => c.feedback);
+  const lastOf = (id) => [...done].reverse().find((c) => c.clientId === id);
+  const levelsOf = (id) => new Set(done.filter((c) => c.clientId === id).map((c) => c.level));
+  const lastFix = [...done].reverse().find((c) => c.feedback?.fix);
+  const next = shown.find((c) => !lastOf(c.id))?.id;
+  const fresh = added[added.length - 1];
+  const forms = FORMS.filter((f) => shown.some((c) => c.form === f.id));
+  const list = filter === 'all' ? shown : shown.filter((c) => c.form === filter);
+  const avg = done.length ? done.reduce((s, c) => s + c.feedback.avg, 0) / done.length : null;
+  const add = () => {
+    if (building) return;
+    if (!left.length) return onMore();
+    setBuilding(true);
+    setFilter('all');
+    setTimeout(() => {
+      onAdd(left[0].id);
+      setBuilding(false);
+    }, 1100);
+  };
+  const stat = (n, label) => html`<span class="flex flex-col items-center px-3 first:ps-0 last:pe-0"><b class="font-display text-[22px] leading-none text-ink">${n}</b><small class="mt-1 text-[12px] font-bold text-muted">${label}</small></span>`;
+
+  return html`<div class="mx-auto max-w-[1060px] px-4 py-6 md:px-8 md:py-8">
+    <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+      <div class="min-w-0">
+        <h1 class="fb-h1 mb-1 text-[28px] md:text-[34px]">עם מי <span class="fb-marker">מתאמנים</span> היום?</h1>
+        <p class="max-w-[52ch] text-[17px] text-muted">כל לקוח מגיע עם דאגה אחרת, ומסתיר משהו שנפתח רק לשאלה טובה.</p>
+      </div>
+      ${done.length > 0 && html`<div class="flex divide-x divide-x-reverse divide-line rounded-2xl bg-white px-4 py-2.5 ring-1 ring-line">
+        ${stat(done.length, done.length === 1 ? 'שיחה' : 'שיחות')}${stat(avg.toFixed(1), 'ממוצע')}${stat(shown.length, 'לקוחות בחדר')}
+      </div>`}
+    </div>
+
     ${lastFix && html`<button type="button" class="rise mb-5 flex w-full max-w-[640px] items-center gap-3 rounded-2xl border-[1.5px] border-brand-300 bg-brand-50 p-3 text-start hover:border-brand-600 cursor-pointer" onClick=${() => onResume(lastFix)}>
       <${SharkAvatar} size=${36} />
       <span class="min-w-0 flex-1"><small class="block text-[13px] font-bold text-brand-600">להמשיך מהפעם הקודמת</small><b class="block text-[16px]">${lastFix.feedback.fix.title.split(':')[0]}</b></span>
       <${Icon} name="arrow-left" size=${18} class="text-brand-600" />
     </button>`}
-    <div class="grid gap-4 md:grid-cols-3">
-      ${CLIENTS.map((c) => {
-        const last = lastByClient(c.id);
+
+    ${shown.length > 3 && html`<div class="mb-4 flex flex-wrap items-center gap-1.5" role="group" aria-label="סינון לפי דאגה">
+      <span class="me-1 text-[14px] font-bold text-muted">לפי דאגה:</span>
+      ${[{ id: 'all', label: 'הכל' }, ...forms].map((f) => {
+        const on = filter === f.id;
+        const n = f.id === 'all' ? shown.length : shown.filter((c) => c.form === f.id).length;
+        return html`<button key=${f.id} type="button" aria-pressed=${on} onClick=${() => setFilter(f.id)} class=${cx('inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[14px] font-semibold transition cursor-pointer', on ? 'bg-brand-600 text-white' : 'bg-white text-ink ring-1 ring-line hover:ring-brand-300')}>${f.icon && html`<${Icon} name=${f.icon} size=${14} />`}${f.label}<span class=${cx('text-[12px]', on ? 'text-white/80' : 'text-faint')}>${n}</span></button>`;
+      })}
+    </div>`}
+
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      ${list.map((c) => {
+        const last = lastOf(c.id);
         const form = formOf(c.form);
+        const lv = levelsOf(c.id);
         const rec = c.id === next && !lastFix;
-        return html`<button key=${c.id} type="button" class=${cx('fb-panel group relative flex flex-col items-center !p-5 text-center transition hover:-translate-y-0.5 hover:border-brand-600 cursor-pointer', rec && '!border-brand-600 ring-4 ring-brand-100')} onClick=${() => onPick(c.id)}>
-          ${rec && html`<span class="absolute -top-3 rounded-full bg-brand-600 px-3 py-0.5 text-[12px] font-bold text-white">מומלץ להתחיל</span>`}
-          <${Avatar} client=${c} size=${64} />
-          <b class="mt-3 block font-display text-[20px]">${c.first}</b>
-          <small class="mb-3 block text-[14px] text-muted">${c.who}</small>
-          <span class="mb-4 text-[15px] italic text-ink">"${c.said}"</span>
-          <span class="mt-auto flex w-full items-center justify-between border-t border-line pt-3 text-[14px]">
-            <span class="inline-flex items-center gap-1 text-muted"><${Icon} name=${form.icon} size=${14} />${last?.feedback ? `${outcomeLabel(last.outcome, c)} · ${last.feedback.avg.toFixed(1)}` : `דאגה: ${form.label}`}</span>
-            <span class="inline-flex items-center gap-1 font-bold text-brand-600">${last ? 'עוד שיחה' : 'לשיחה'}<${Icon} name="arrow-left" size=${16} class="transition group-hover:-translate-x-0.5" /></span>
+        const isNew = c.id === fresh && !last;
+        return html`<button key=${c.id} type="button" class=${cx('fb-panel group relative flex flex-col !p-0 text-start transition hover:-translate-y-0.5 hover:border-brand-600 cursor-pointer', rec && '!border-brand-600 ring-4 ring-brand-100', isNew && 'rise')} onClick=${() => onPick(c.id)}>
+          ${(rec || isNew) && html`<span class=${cx('absolute -top-3 end-4 rounded-full px-3 py-0.5 text-[12px] font-bold text-white', rec ? 'bg-brand-600' : 'bg-money')}>${rec ? 'מומלץ להתחיל' : 'חדש בחדר'}</span>`}
+          <span class="flex items-center gap-3 p-4 pb-3">
+            <${Avatar} client=${c} size=${52} />
+            <span class="min-w-0"><b class="block font-display text-[19px] leading-tight">${c.name}</b><small class="block text-[14px] text-muted">${c.who}</small></span>
           </span>
+          <span class="block px-4">
+            <span class="block rounded-2xl rounded-ss-sm bg-canvas px-3 py-2 text-[15px] text-ink">"${c.said}"</span>
+            <small class="mt-2 flex items-start gap-1.5 text-[13px] text-muted"><${Icon} name="corner-down-left" size=${13} class="mt-0.5 shrink-0" />${c.from}</small>
+          </span>
+          ${last && html`<small class="mx-4 mt-3 flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-[13px] font-semibold text-brand-600"><${Icon} name=${OUTCOME[last.outcome]?.icon || 'message-circle'} size=${13} />בפעם האחרונה: ${outcomeLabel(last.outcome, c)} · ${last.feedback.avg.toFixed(1)}</small>`}
+          <span class="mt-auto block pt-3"><span class="flex items-center gap-2 border-t border-line px-4 py-3">
+            <span class="inline-flex min-w-0 items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[13px] font-bold text-brand-600"><${Icon} name=${form.icon} size=${13} /><span class="truncate">${c.tag}</span></span>
+            <span class="ms-auto flex shrink-0 items-center gap-1" title=${`רמות שתרגלת עם ${c.first}`} aria-label=${`רמות שתרגלת: ${[...lv].sort().join(', ') || 'עוד לא'}`}>${LEVELS.map((l) => html`<span key=${l.id} class=${cx('h-2 w-2 rounded-full', lv.has(l.id) ? 'bg-brand-600' : 'bg-line')}></span>`)}</span>
+            <span class="inline-flex shrink-0 items-center gap-1 text-[14px] font-bold text-brand-600">${last ? 'עוד שיחה' : 'לשיחה'}<${Icon} name="arrow-left" size=${16} class="transition group-hover:-translate-x-0.5" /></span>
+          </span></span>
         </button>`;
       })}
+      ${filter === 'all' && html`<button type="button" onClick=${add} aria-busy=${building} class="group flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-[18px] border-2 border-dashed border-brand-300 bg-white/50 p-5 text-center transition hover:border-brand-600 hover:bg-brand-50 cursor-pointer">
+        ${building
+          ? html`<span class="grid h-12 w-12 place-items-center rounded-full bg-brand-50"><span class="fb-spin" style=${{ width: 20, height: 20, borderColor: '#2f5fc4', borderTopColor: 'transparent' }}></span></span><b class="font-display text-[18px]">בונה לקוח חדש...</b><small class="max-w-[30ch] text-[14px] text-muted">מתיק הלקוח, מהסל ומההצעה שלך. עסק אחר, דאגה אחרת.</small>`
+          : html`<span class="grid h-12 w-12 place-items-center rounded-full bg-brand-600 text-white transition group-hover:scale-105"><${Icon} name="user-plus" size=${22} /></span><b class="font-display text-[19px]">לקוח חדש</b><small class="max-w-[30ch] text-[14px] text-muted">עוד לקוח מאותו קהל, עם דאגה שעוד לא פגשת. אפשר להוסיף כמה שרוצים.</small>`}
+      </button>`}
     </div>
-    <div class="mt-8 flex flex-wrap items-center gap-2 border-t border-line pt-4">
-      <span class="me-1 text-[14px] font-bold text-muted">עוד בחדר:</span>
+
+    <h2 class="mb-3 mt-10 text-[15px] font-bold text-muted">עוד בחדר</h2>
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       ${[
-        ['zap', 'סבב התנגדויות מהיר', () => onTool('drill')],
-        ['file-search', 'ניתוח שיחה שהייתה', () => onTool('analysis')],
-        ['file-text', 'דף התשובות', onSheet],
-        ['folder-open', 'מה הלקוחות יודעים', onContext],
-      ].map(([icon, label, fn]) => html`<button key=${label} type="button" class="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-white px-3.5 text-[14px] font-semibold hover:border-brand-300 hover:text-brand-600 cursor-pointer" onClick=${fn}><${Icon} name=${icon} size=${15} />${label}</button>`)}
+        ['zap', 'סבב התנגדויות מהיר', 'משפט, תשובה ותיקון. חמש דקות', () => onTool('drill')],
+        ['file-search', 'ניתוח שיחה שהייתה', 'מדביקים תמלול, מקבלים מפה', () => onTool('analysis')],
+        ['file-text', 'דף התשובות', `${state.sheet.length} התנגדויות, במילים שלך`, onSheet],
+        ['folder-open', 'מה הלקוחות יודעים', 'ההקשר שממנו הם נבנים', onContext],
+      ].map(([icon, label, sub, fn]) => html`<button key=${label} type="button" class="flex items-center gap-3 rounded-2xl border border-line bg-white p-3 text-start transition hover:border-brand-300 cursor-pointer" onClick=${fn}><span class="fb-chip-ic h-10 w-10 shrink-0"><${Icon} name=${icon} size=${18} /></span><span class="min-w-0"><b class="block text-[15px]">${label}</b><small class="block text-[13px] text-muted">${sub}</small></span></button>`)}
     </div>
   </div>`;
 }

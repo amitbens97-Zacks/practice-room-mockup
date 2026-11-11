@@ -271,7 +271,8 @@ export function Feedback({ call, onPractice, notify }) {
 export function StageDrill({ stageN, clientId, onDone }) {
   const spec = STAGE_DRILL[stageN] || STAGE_DRILL[8];
   const stage = STAGES.find((s) => s.n === (STAGE_DRILL[stageN] ? stageN : 8));
-  const client = CLIENTS.find((c) => c.id === (clientId || 'ronit'));
+  // The two drills are written around רונית's call, whoever the call was with.
+  const client = CLIENTS.find((c) => c.id === 'ronit');
   const [text, setText] = useState('');
   const [tries, setTries] = useState([]);
   const last = tries[tries.length - 1];
