@@ -84,7 +84,7 @@ function App({ view: shellView, onViewChange }) {
     // A fresh page has no calls, so a reload on the feedback opens the sample feedback.
     if (s === 'sample' || s === 'feedback') return { screen: 'feedback', sampleNow: true };
     if (s === 'brief' || s === 'call') return { screen: s, clientId: 'ronit', fresh: s === 'call' };
-    if (s === 'stage') return { screen: 'stage', stageN: 8, clientId: 'ronit' };
+    if (s === 'stage') return { screen: 'stage', stageN: STAGE_DRILL[params.get('stage')] ? Number(params.get('stage')) : 8, clientId: 'ronit' };
     return { screen: SCREENS.includes(s) ? s : 'opening' };
   }
 
