@@ -26,28 +26,54 @@ export function Opening() {
   return html`<div class="mx-auto grid max-w-[1120px] items-center gap-8 px-4 py-6 md:grid-cols-[1.1fr_0.9fr] md:gap-12 md:px-8 md:py-8">
     <div>
       <${StepHeading} n="12" eyebrow="שלב 12 · מגדילים מכירות" title=${['מתאמנים על השיחה, לפני ', 'הלקוח הבא', '']} />
-      <p class="mb-6 max-w-[50ch] text-[18px] text-ink">לקוחות שנבנים מתיק הלקוח, מהסל ומההצעה שלך, וכשנגמרים מוסיפים עוד. ${g('מנהל', 'מנהלת')} מולם שיחת מכירה מלאה, ובסוף ${g('מקבל', 'מקבלת')} משוב מדויק: מה עבד, התיקון האחד, וניסוח שאפשר להגיד כבר בשיחה הבאה.</p>
-      <div class="flex flex-col gap-2 border-t border-line pt-4 text-[15px]">
-        <p class="flex flex-wrap items-center gap-x-2 gap-y-1"><${Icon} name="list" size=${17} class="text-brand-600" /><b>החלקים:</b> ${PARTS.join(' · ')}</p>
-        <p class="flex items-center gap-2"><${Icon} name="clock" size=${17} class="text-brand-600" /><b>זמן:</b> כ-20 דקות לשיחה</p>
-        <p class="flex items-center gap-2"><${Icon} name="file-check-2" size=${17} class="text-brand-600" /><b>התוצר:</b> דף תשובות להתנגדויות, במילים שלך</p>
+      <p class="mb-5 max-w-[42ch] text-[19px] text-ink">${g('מתאמן', 'מתאמנת')} על לקוחות מהקהל שלך, ובסוף ${g('מקבל', 'מקבלת')} תיקון אחד שאפשר להגיד כבר בשיחה הבאה.</p>
+      <div class="flex flex-wrap gap-2 text-[14px]">
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 ring-1 ring-line"><${Icon} name="clock" size=${15} class="text-brand-600" />כ-20 דקות לשיחה</span>
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 ring-1 ring-line"><${Icon} name="file-check-2" size=${15} class="text-brand-600" />התוצר: דף תשובות להתנגדויות</span>
       </div>
     </div>
-    <div class="relative flex justify-center pb-8">
-      <div class="paper w-[330px] rotate-[1deg] rounded-[18px] p-4">
-        <div class="mb-3 flex items-center gap-2 border-b border-line pb-2"><${Avatar} client=${CLIENTS[0]} size=${34} /><b class="text-[15px]">רונית לוי</b><span class="ms-auto text-[12px] text-muted">רמה 2</span></div>
-        <div class="flex flex-col gap-2 text-[14px]">
-          <p class="self-start rounded-2xl rounded-ss-sm bg-canvas px-3 py-2">ניסיתי כבר סוכנות. זה לא עבד.</p>
-          <p class="self-end rounded-2xl rounded-se-sm bg-brand-600 px-3 py-2 text-white">מה הכי מפריע לך, שזה יהיה שוב אותו דבר?</p>
-          <p class="self-start rounded-2xl rounded-ss-sm bg-canvas px-3 py-2">כן. שאשלם, ושוב לא אדע מה קורה.</p>
-        </div>
-      </div>
-      <${Note} tone="white" tilt=${-3} class="absolute -bottom-2 left-0 w-[210px] !p-3 text-[14px]">
-        <span class="fb-note-kicker">התיקון האחד</span>
-        <span>לסכם במילים שלה, לפני ההצגה.</span>
-      <//>
-      <span class="hand absolute -top-3 right-2 rotate-[3deg] text-[26px]">בלי לחץ, עם משוב</span>
+    <${OpeningArt} />
+  </div>`;
+}
+
+// The opening illustration: a live practice call with רונית, the answer sheet it feeds behind
+// it, the score and the one fix. The lines appear one by one, and רונית is typing.
+function OpeningArt() {
+  const ronit = CLIENTS[0];
+  const lines = [
+    ['them', 'ניסיתי כבר סוכנות. זה לא עבד.'],
+    ['me', 'מה הכי מפריע לך, שזה יהיה שוב אותו דבר?'],
+    ['them', 'כן. שאשלם, ושוב לא אדע מה קורה.'],
+  ];
+  return html`<div class="relative mx-auto h-[440px] w-full max-w-[420px] select-none" aria-hidden="true">
+    <div class="absolute inset-x-4 bottom-4 top-12 rounded-[44px] bg-brand-50"></div>
+    <div class="absolute bottom-10 left-8 h-24 w-24 rounded-full border-2 border-dashed border-brand-200"></div>
+
+    <div class="paper absolute right-0 top-0 w-[190px] rotate-[6deg] rounded-[14px] p-3">
+      <p class="mb-2 flex items-center gap-1.5 text-[12px] font-bold text-muted"><${Icon} name="file-check-2" size=${13} class="text-brand-600" />דף תשובות להתנגדויות</p>
+      <p class="mb-1 text-[12px] font-bold">"ניסיתי כבר סוכנות"</p>
+      <span class="mb-2 inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-bold text-brand-600"><${Icon} name="pencil" size=${10} />במילים שלך</span>
+      <div class="flex flex-col gap-1.5"><span class="h-1.5 w-full rounded-full bg-line"></span><span class="h-1.5 w-4/5 rounded-full bg-line"></span><span class="h-1.5 w-3/5 rounded-full bg-line"></span></div>
     </div>
+
+    <div class="paper absolute left-1/2 top-[92px] w-[292px] -translate-x-1/2 rotate-[-1.5deg] rounded-[20px] p-3.5">
+      <div class="mb-2.5 flex items-center gap-2"><${Avatar} client=${ronit} size=${34} /><span class="min-w-0"><b class="block text-[15px] leading-tight">רונית לוי</b><small class="flex items-center gap-1 text-[11px] text-muted"><span class="pulse-dot h-1.5 w-1.5 rounded-full bg-money"></span>בשיחה · רמה 2</small></span></div>
+      <div class="mb-3 flex gap-1">${[1, 1, 1, 0.5, 0, 0].map((v, i) => html`<span key=${i} class=${cx('h-1.5 flex-1 rounded-full', v === 1 ? 'bg-brand-600' : v ? 'bg-brand-300' : 'bg-line')}></span>`)}</div>
+      <div class="flex flex-col gap-2 text-[14px]">
+        ${lines.map(([who, t], i) => html`<p key=${i} class=${cx('rise max-w-[85%] rounded-2xl px-3 py-2 leading-snug', who === 'me' ? 'self-end rounded-ee-sm bg-brand-600 text-white' : 'self-start rounded-es-sm border border-line bg-white')} style=${{ animationDelay: `${0.25 + i * 0.45}s` }}>${t}</p>`)}
+        <span class="rise inline-flex gap-1 self-start rounded-2xl rounded-es-sm border border-line bg-white px-3 py-2.5" style=${{ animationDelay: '1.7s' }}><span class="pulse-dot h-1.5 w-1.5 rounded-full bg-muted"></span><span class="pulse-dot h-1.5 w-1.5 rounded-full bg-muted" style="animation-delay:.2s"></span><span class="pulse-dot h-1.5 w-1.5 rounded-full bg-muted" style="animation-delay:.4s"></span></span>
+      </div>
+    </div>
+
+    <div class="pop-in absolute left-0 top-14 rotate-[-5deg] rounded-2xl bg-white px-3.5 py-2 text-center shadow-[0_6px_18px_rgba(30,40,90,.12)] ring-1 ring-line" style=${{ animationDelay: '2s' }}>
+      <b class="block font-display text-[28px] leading-none text-brand-600">4.2</b><small class="text-[11px] text-muted">מתוך 5</small>
+    </div>
+
+    <${Note} tone="white" tilt=${-3} class="absolute bottom-0 left-2 w-[205px] !p-3 text-[14px]">
+      <span class="fb-note-kicker">התיקון האחד</span>
+      <span>לסכם במילים שלה, לפני ההצגה.</span>
+    <//>
+    <span class="hand absolute bottom-3 right-3 rotate-[-3deg] text-[24px]">בלי לחץ, עם משוב</span>
   </div>`;
 }
 
