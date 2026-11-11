@@ -15,7 +15,7 @@ import * as ai from './ai.js';
 import { hasAI } from './ai.js';
 import { Opening, Room, ContextSheet, Brief, Done } from './step.js';
 import { Call, Feedback, StageDrill } from './call.js';
-import { PrepSheet } from './sheet.js';
+import { PrepSheet, CallScript } from './sheet.js';
 import { Drill, Analysis } from './tools.js';
 import { AnswerSheet } from './sheet.js';
 import { DevPanel } from './devnotes.js';
@@ -23,8 +23,8 @@ import { EMBED, IS_PHONE, readView, saveView, writeHandoff, takeHandoff, applyPh
 
 const params = new URLSearchParams(location.search);
 const KEY = 'flowbiz-pr-state';
-const SCREENS = ['opening', 'room', 'brief', 'call', 'feedback', 'stage', 'drill', 'analysis', 'sheet', 'done'];
-const PART_OF = { room: 0, brief: 0, drill: 0, analysis: 0, call: 1, feedback: 2, stage: 2, sheet: 3 };
+const SCREENS = ['opening', 'room', 'brief', 'call', 'feedback', 'stage', 'drill', 'analysis', 'sheet', 'script', 'done'];
+const PART_OF = { room: 0, brief: 0, drill: 0, analysis: 0, call: 1, feedback: 2, stage: 2, sheet: 3, script: 3 };
 
 const freshState = () => ({ calls: [], added: [], real: [], sheet: SHEET.map((r) => ({ ...r })), drill: { done: 0 }, done: false });
 // The mockup always opens the step from zero: no calls, no "מהפעם הקודמת".
@@ -329,6 +329,7 @@ function App({ view: shellView, onViewChange }) {
     drill: html`<${BottomBar} back=${toRoom} status=${html`<span></span>`} primary=${html`<span></span>`} />`,
     analysis: html`<${BottomBar} back=${toRoom} status=${html`<span></span>`} primary=${html`<span></span>`} />`,
     sheet: html`<${BottomBar} back=${toRoom} status=${html`<${Status} reason=${needCall} save=${'saved'} />`} primary=${finishBtn} />`,
+    script: html`<${BottomBar} back=${html`<${Button} variant="secondary" onClick=${() => go({ screen: state.done ? 'done' : 'room' })}>${state.done ? 'חזרה לסיום' : 'חזרה לחדר'}<//>`} status=${html`<${Status} reason=${needCall} />`} primary=${state.done ? html`<${PrimaryButton} label="לשלב הבא" onClick=${() => notify('השלב הבא נפתח במפה: שלב 13', 'arrow-left')} />` : finishBtn} />`,
     done: html`<${BottomBar}
       extra=${html`<${Button} variant="text" onClick=${() => go({ screen: 'room' })}><${Icon} name="door-open" size=${16} />לחדר התרגול<//><${Button} variant="text" onClick=${() => go({ screen: 'sheet' })}><${Icon} name="file-text" size=${16} />דף התשובות<//>`}
       primary=${html`<${PrimaryButton} label="לשלב הבא" onClick=${() => notify('השלב הבא נפתח במפה: שלב 13', 'arrow-left')} />`}
@@ -348,14 +349,15 @@ function App({ view: shellView, onViewChange }) {
       onContext=${() => setCtxOpen(true)}
       onSheet=${() => go({ screen: 'sheet' })}
     />`,
-    brief: client && html`<${Brief} client=${client} level=${level} setLevel=${setLevel} onPrep=${() => setPrepFor(client.id)} />`,
+    brief: client && html`<${Brief} client=${client} level=${level} setLevel=${setLevel} onPrep=${() => setPrepFor(client.id)} last=${[...state.calls].reverse().find((c) => c.clientId === client.id && c.feedback)} />`,
     call: call && html`<${Call} key=${call.id} call=${call} busy=${busy} onSend=${send} onHint=${hint} onSample=${playSample} />`,
     feedback: call?.feedback && html`<${Feedback} key=${call.id} call=${call} notify=${notify} onPractice=${(n) => go({ screen: 'stage', stageN: n, clientId: call.clientId, callId: call.id })} onRetry=${retry} onLevelUp=${levelUp} onPrep=${() => setPrepFor(call.clientId)} />`,
     stage: html`<${StageDrill} stageN=${route.stageN} clientId=${route.clientId} onDone=${() => (call?.feedback ? go({ screen: 'feedback', callId: route.callId }) : go({ screen: 'room' }))} />`,
     drill: html`<${Drill} sheet=${state.sheet} onFinish=${() => (patch({ drill: { done: (state.drill?.done || 0) + 1 } }), go({ screen: 'room' }))} />`,
     analysis: html`<${Analysis} notify=${notify} />`,
-    sheet: html`<${AnswerSheet} sheet=${state.sheet} setRow=${setRow} notify=${notify} />`,
-    done: html`<${Done} state=${state} />`,
+    sheet: html`<${AnswerSheet} sheet=${state.sheet} setRow=${setRow} notify=${notify} onScript=${() => go({ screen: 'script' })} />`,
+    script: html`<${CallScript} state=${state} notify=${notify} onSheet=${() => go({ screen: 'sheet' })} />`,
+    done: html`<${Done} state=${state} onScript=${() => go({ screen: 'script' })} />`,
   }[screen];
 
   const isCall = screen === 'call';

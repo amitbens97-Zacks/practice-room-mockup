@@ -250,37 +250,69 @@ export function ContextSheet({ onClose }) {
 
 // ---------- the brief before a call ----------
 // Who, what they wrote, the goal, and how hard. The call structure shows live in the call.
-export function Brief({ client, level, setLevel, onPrep }) {
-  const L = LEVELS.find((l) => l.id === level);
-  return html`<div class="mx-auto max-w-[620px] px-4 py-6 md:py-10">
-    <div class="mb-5 flex flex-col items-center text-center">
-      <${Avatar} client=${client} size=${72} />
-      <h1 class="fb-h1 mt-3 text-[28px] md:text-[32px]">${client.name}</h1>
-      <p class="text-[16px] text-muted">${client.who}</p>
+export function Brief({ client, level, setLevel, onPrep, last }) {
+  const she = (m, f) => (client.fem ? f : m);
+  const plan = [
+    ['פתיחה', 'מסגרת, ושבסוף מחליטים יחד, כן או לא'],
+    ['הגילוי', `שאלה אחת בכל פעם: למה עכשיו, מה ${she('ניסה', 'ניסתה')}, ומה חייב להיות הפעם`],
+    ['לפני ההצגה', `סיכום במילים ${she('שלו', 'שלה')} עד "נכון", ובדיקה בקול: זה מתאים ${she('לו', 'לה')}?`],
+  ];
+  return html`<div class="mx-auto max-w-[920px] px-4 py-6 md:px-8 md:py-8">
+    <p class="fb-eyebrow mb-3">לפני השיחה</p>
+    <div class="grid gap-4 md:grid-cols-2">
+      <section class="paper relative overflow-hidden rounded-[22px]">
+        <div class="h-[78px]" style=${{ background: client.tint || '#e8eefc' }}></div>
+        <div class="px-5 pb-5">
+          <div class="-mt-10 flex items-end justify-between gap-3">
+            <span class="rounded-full ring-4 ring-white"><${Avatar} client=${client} size=${76} /></span>
+            <span class="mb-1 inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[12px] font-bold text-muted ring-1 ring-line"><span class="pulse-dot h-1.5 w-1.5 rounded-full bg-money"></span>מחכה בזום</span>
+          </div>
+          <h1 class="fb-h1 mt-3 text-[26px] md:text-[30px]">${client.name}</h1>
+          <p class="text-[15px] text-muted">${client.who}</p>
+          <p class="mt-4 flex items-start gap-1.5 text-[13px] font-bold text-muted"><${Icon} name="map-pin" size=${14} class="mt-0.5 shrink-0" />${client.from}</p>
+          <p class="mt-1.5 rounded-2xl rounded-ss-sm border border-line bg-white px-3.5 py-2.5 text-[16px] leading-relaxed">"${client.said}"</p>
+          ${client.tag && html`<p class="mt-3 flex flex-wrap items-center gap-1.5 text-[14px]"><span class="text-muted">מה כנראה יעלה:</span><${Tag} tone="muted">${client.tag}<//></p>`}
+          ${client.real && html`<div class="mt-3 border-t border-line pt-3">
+            <p class="flex items-start gap-1.5 text-[14px] text-muted"><${Icon} name="notebook-pen" size=${14} class="mt-0.5 shrink-0" />נבנה מהתיאור שלך. מה שלא כתבת הושלם כהשערה, ומסומן במשוב.</p>
+            <button type="button" onClick=${onPrep} class="mt-2 inline-flex items-center gap-1.5 text-[14px] font-bold text-[#8a5a12] underline underline-offset-2 cursor-pointer"><${Icon} name="clipboard-list" size=${15} />כרטיס הכנה לשיחה האמיתית</button>
+          </div>`}
+        </div>
+      </section>
+      <div class="flex flex-col gap-3">
+        <section class="rounded-[22px] bg-brand-600 p-5 text-white">
+          <p class="mb-1 flex items-center gap-1.5 text-[13px] font-bold opacity-80"><${Icon} name="target" size=${14} />המטרה</p>
+          <b class="block font-display text-[22px] leading-snug">החלטה ברורה, וצעד הבא ביומן</b>
+          <p class="mt-1 text-[14px] opacity-85">גם "לא" הוגן נחשב. "צריך לחשוב" לא.</p>
+        </section>
+        <section class="fb-panel !p-4">
+          <p class="mb-2.5 text-[13px] font-bold text-muted">שלושה דברים לזכור</p>
+          <ol class="flex flex-col gap-2.5">
+            ${plan.map(([k, v], i) => html`<li key=${k} class="flex items-start gap-2.5"><span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-100 text-[12px] font-bold text-brand-600">${i + 1}</span><span class="text-[15px] leading-snug"><b>${k}:</b> ${v}</span></li>`)}
+          </ol>
+        </section>
+        ${last?.feedback?.fix && html`<${Note} tone="white" tilt=${-1} class="!p-4">
+          <span class="fb-note-kicker">מהפעם הקודמת עם ${client.first}</span>
+          <b class="block text-[15px]">${last.feedback.fix.title.split(':')[0]}</b>
+          <span class="text-[14px]">${last.feedback.fix.alt}</span>
+        <//>`}
+      </div>
     </div>
-    <section class="fb-panel mb-4 !p-4">
-      <p class="mb-1 text-[13px] font-bold text-muted">${client.from}</p>
-      <p class="text-[17px]">${client.fem ? 'כתבה' : 'כתב'}: <b>"${client.said}"</b></p>
-      ${client.real && html`<p class="mt-2 flex items-start gap-1.5 border-t border-line pt-2 text-[14px] text-muted"><${Icon} name="notebook-pen" size=${14} class="mt-0.5 shrink-0" />נבנה מהתיאור שלך. מה שלא כתבת הושלם כהשערה, ומסומן במשוב.</p>
-      <button type="button" onClick=${onPrep} class="mt-2 inline-flex items-center gap-1.5 text-[14px] font-bold text-[#8a5a12] underline underline-offset-2 cursor-pointer"><${Icon} name="clipboard-list" size=${15} />כרטיס הכנה לשיחה האמיתית</button>`}
+    <section class="mt-6">
+      <p class="mb-2 flex items-baseline justify-between text-[14px] font-bold">רמת קושי<span class="text-[12px] font-bold text-faint">מהקלה לקשה</span></p>
+      <div class="grid grid-cols-2 gap-2 md:grid-cols-4" role="radiogroup" aria-label="רמת קושי">
+        ${LEVELS.map(
+          (l) => html`<button key=${l.id} type="button" role="radio" aria-checked=${level === l.id} onClick=${() => setLevel(l.id)} class=${cx('flex flex-col items-start gap-1.5 rounded-2xl border-[1.5px] p-3 text-start transition cursor-pointer', level === l.id ? 'border-brand-600 bg-brand-50' : 'border-line bg-white hover:border-brand-300')}>
+            <span class="flex w-full items-center gap-2"><span class=${cx('grid h-6 w-6 place-items-center rounded-full text-[12px] font-bold', level === l.id ? 'bg-brand-600 text-white' : 'bg-canvas ring-1 ring-line')}>${l.id}</span><b class="text-[15px]">${l.label.split(' · ')[1]}</b><span class="ms-auto flex gap-0.5" aria-hidden="true">${[1, 2, 3, 4].map((n) => html`<span key=${n} class=${cx('h-2.5 w-1 rounded-full', n <= l.id ? (level === l.id ? 'bg-brand-600' : 'bg-muted') : 'bg-line')}></span>`)}</span></span>
+            <span class="text-[13px] leading-snug text-muted">${client.fem ? l.subF : l.sub}</span>
+          </button>`,
+        )}
+      </div>
     </section>
-    <section class="mb-6 flex items-start gap-3 rounded-2xl bg-brand-50 p-4">
-      <span class="fb-chip-ic h-9 w-9 shrink-0"><${Icon} name="target" size=${18} /></span>
-      <span><b class="block text-[16px]">המטרה: החלטה ברורה, וצעד הבא ביומן</b><span class="text-[15px] text-muted">גם "לא" הוגן נחשב. "צריך לחשוב" לא.</span></span>
-    </section>
-    <p class="mb-2 text-[14px] font-bold">רמת קושי</p>
-    <div class="grid grid-cols-4 gap-1 rounded-2xl bg-canvas p-1 ring-1 ring-line" role="radiogroup" aria-label="רמת קושי">
-      ${LEVELS.map(
-        (l) => html`<button key=${l.id} type="button" role="radio" aria-checked=${level === l.id} onClick=${() => setLevel(l.id)} class=${cx('flex flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[14px] font-bold transition cursor-pointer sm:flex-row sm:justify-center sm:gap-1.5', level === l.id ? 'bg-white text-brand-600 shadow-sm ring-1 ring-brand-300' : 'text-muted hover:text-ink')}><span class=${cx('grid h-6 w-6 place-items-center rounded-full text-[12px]', level === l.id ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-line')}>${l.id}</span>${l.label.split(' · ')[1]}</button>`,
-      )}
-    </div>
-    <p class="mt-1.5 flex items-center px-2 text-[12px] font-bold text-faint" aria-hidden="true"><span>הכי קל</span><span class="mx-2 h-px flex-1 bg-line"></span><span>הכי קשה</span></p>
-    <p class="mt-2 text-center text-[14px] text-muted">${L.sub}</p>
   </div>`;
 }
 
 // ---------- the finish ----------
-export function Done({ state }) {
+export function Done({ state, onScript }) {
   useEffect(() => {
     const t = setTimeout(() => confetti('step'), 200);
     return () => clearTimeout(t);
@@ -304,6 +336,11 @@ export function Done({ state }) {
           ${rows.map(([icon, k, v]) => html`<li key=${k} class="flex items-start gap-3 py-2"><span class="mt-0.5 text-brand-600"><${Icon} name=${icon} size=${18} /></span><span class="w-[92px] shrink-0 text-[14px] font-bold">${k}</span><span class="min-w-0 text-[15px]">${v}</span></li>`)}
         </ul>
       </section>
+      <button type="button" onClick=${onScript} class="mt-4 flex w-full items-center gap-3 rounded-2xl bg-brand-600 p-4 text-start text-white transition hover:opacity-95 cursor-pointer">
+        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/15"><${Icon} name="scroll-text" size=${22} /></span>
+        <span class="min-w-0 flex-1"><b class="block text-[17px]">התסריט שלך לשיחת מכירה</b><span class="text-[14px] opacity-85">מבנה השיחה, ההתנגדויות הנפוצות והתשובות. עמוד אחד לפני כל שיחה.</span></span>
+        <${Icon} name="chevron-left" size=${20} class="shrink-0" />
+      </button>
     </div>
     <div class="flex justify-center pt-8">
       <${Note} tone="white" tilt=${-2} class="fb-badge-note !pt-10">

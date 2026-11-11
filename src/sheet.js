@@ -2,10 +2,10 @@
 // Each row: what the client said, the worry behind it, an answer and a short WhatsApp
 // version. It starts from the client file, the offer and the audience's common objections;
 // after every call the rows that came up are rewritten in the user's own words.
-import { html, useState, Icon, cx } from './lib.js';
-import { Button, InlineEdit } from './components.js';
+import { html, useState, Icon, cx, money } from './lib.js';
+import { Button, InlineEdit, Note } from './components.js';
 import { Sheet, Tag } from './ui.js';
-import { FORMS, g } from './data.js';
+import { FORMS, CONTEXT, g } from './data.js';
 
 // One objection: what they said and the answer. The worry and the WhatsApp version open on demand.
 function Row({ r, setRow, notify }) {
@@ -28,7 +28,7 @@ function Row({ r, setRow, notify }) {
   </article>`;
 }
 
-export function AnswerSheet({ sheet, setRow, notify }) {
+export function AnswerSheet({ sheet, setRow, notify, onScript }) {
   const [form, setForm] = useState('all');
   const rows = sheet.filter((r) => form === 'all' || r.form === form);
   const groups = FORMS.filter((f) => rows.some((r) => r.form === f.id));
@@ -39,6 +39,7 @@ export function AnswerSheet({ sheet, setRow, notify }) {
         <p class="mt-1 text-[16px] text-muted">התוצר של השלב. מה שעלה בשיחה נכתב מחדש במילים שלך.</p>
       </div>
       <div class="flex gap-2">
+        <${Button} variant="mini" onClick=${onScript}><${Icon} name="scroll-text" size=${15} />התסריט שלך<//>
         <${Button} variant="mini" onClick=${() => notify('ה-PDF ירד, ונשמר בקבצים › מגדילים מכירות', 'download')}><${Icon} name="download" size=${15} />הורדה<//>
       </div>
     </div>
@@ -124,4 +125,123 @@ export function PrepSheet({ client: c, sheet, calls, onClose, notify }) {
     ${check.length > 0 && block('search', 'לברר בשיחה (לא הגיע ממך, הושלם כהשערה)', html`<p class="text-[15px]">${check.join(' · ')}</p>`)}
     ${block('repeat', 'מהתרגול', last?.feedback.fix ? html`<p class="text-[15px]"><b>${last.feedback.fix.title.split(':')[0]}:</b> ${last.feedback.fix.alt}</p>` : html`<p class="text-[15px] text-muted">עוד לא התאמנת על ${c.first}. שיחה אחת לפני, ו${g('תגיע מוכן', 'תגיעי מוכנה')} יותר.</p>`)}
   <//>`;
+}
+
+// "התסריט שלך": one page to open before every sales call. The structure of the call (prompt
+// v2 section 4, in six parts with minutes and ready lines), the common objections with the
+// short answers from the sheet (the user's own words first), and what to remember from the
+// practice. A line the user said well in practice replaces the ready line, marked as theirs.
+function scriptOf(state) {
+  const done = state.calls.filter((c) => c.feedback && c.f);
+  const said = (k, ok = () => true) => [...done].reverse().map((c) => c.f[k]).find((x) => x && ok(x)) || null;
+  const mineConfirmed = [...done].reverse().find((c) => c.f.summary && c.f.confirmed)?.f.summary || null;
+  const core = CONTEXT.tracks.find((t) => t.core) || CONTEXT.tracks[0];
+  const parts = [
+    {
+      title: 'פתיחה ומסגור', min: 2, goal: 'פותחים באדם, ואומרים מה יקרה בשיחה ושבסוף מחליטים.',
+      lines: [[null, `היי ___, תודה שקבעת. בחצי השעה הקרובה אשאל קצת על העסק, ${g('אספר איך אני עובד', 'אספר איך אני עובדת')}, ובסוף נחליט יחד אם זה מתאים, כן או לא. מתאים לך?`, said('frame')]],
+    },
+    {
+      title: 'הגילוי', min: 10, goal: `שאלה אחת בכל פעם. הלקוח מדבר, ${g('אתה מקשיב', 'את מקשיבה')}. על כל תשובה: "מה זאת אומרת ___?" במילה שלו.`,
+      lines: [[null, 'מה קרה שדווקא עכשיו פנית?'], [said('tries'), 'מה כבר ניסית, ומה לא עבד?'], [said('motive'), 'ומה ישתנה לך כשזה ייפתר?'], [said('need'), 'מה צריך שיהיה הפעם, כדי שזה באמת יעבוד לך?']],
+    },
+    {
+      title: 'סיכום והתאמה', min: 5, goal: 'הלקוח שומע את הבעיה שלו במילים שלו, ואז אומרים בקול אם זה מתאים.',
+      lines: [
+        [null, `אז אם ${g('אני מסכם', 'אני מסכמת')}: היום ___, רוצה להגיע ל-___, ניסית ___ וזה נתקע ב-___. ומה שחייב להיות הפעם זה ___. הבנתי נכון?`, mineConfirmed],
+        [said('decider') || said('budget'), 'מי עוד מחליט איתך, וכמה מתאים לך להשקיע בזה?'],
+        [null, 'לפי מה שאמרת, זה מתאים לך: ___, כי ___. (לא מתאים? אומרים את זה, ונותנים כיוון.)', said('fitRight')],
+      ],
+    },
+    {
+      title: 'ההצעה', min: 5, goal: 'מבקשים רשות, ומציגים רק את מה שמחובר למה שנאמר. שלושה דברים, לא עשרה.',
+      lines: [[said('permission'), 'יש לי כמה מחשבות איך לסגור את זה. רוצה לשמוע?']],
+    },
+    {
+      title: 'מחיר והחלטה', min: 5, goal: 'שלוש שאלות, המספר, ושקט.',
+      lines: [[said('threeQ'), 'לפני המספר, שלוש שאלות: זה פותר את ___? נוח לך לעבוד איתי? ואם המספר הגיוני, אתה בעמדה להחליט?'], [null, `${core.name}: ${money(core.price)}, אפשר ב-3 תשלומים. (ושותקים.)`]],
+    },
+    {
+      title: 'צעד הבא', min: 3, goal: 'יש התאמה: מועד ביומן. אין: כיוון או הפניה, ופרידה יפה.',
+      lines: [[said('nextStep'), 'בוא נתקדם. מתי נוח לך השבוע לפגישה הראשונה?']],
+    },
+  ];
+  const objections = FORMS.map((f) => [...state.sheet.filter((r) => r.form === f.id)].sort((a, b) => (b.mine ? 1 : 0) - (a.mine ? 1 : 0))[0]).filter(Boolean);
+  const fixes = [];
+  [...done].reverse().forEach((c) => {
+    const fx = c.feedback.fix;
+    const k = fx?.title.split(':')[0];
+    if (fx && !fixes.some((x) => x.k === k) && fixes.length < 3) fixes.push({ k, alt: fx.alt });
+  });
+  return { parts, objections, fixes };
+}
+
+export function CallScript({ state, notify, onSheet }) {
+  const { parts, objections, fixes } = scriptOf(state);
+  const clean = (t) => t.replace(/^"|"$/g, '');
+  const text = [
+    'התסריט שלך לשיחת מכירה',
+    ...parts.map((p, i) => `${i + 1}. ${p.title} (${p.min} דק'): ${p.lines.map(([m, d]) => `"${clean(m || d)}"`).join(' ')}`),
+    'התנגדויות נפוצות:',
+    ...objections.map((r) => `"${r.said}": ${r.short}`),
+    ...(fixes.length ? ['לזכור מהתרגול:', ...fixes.map((f) => `${f.k}: ${f.alt}`)] : []),
+  ].join('\n');
+  const copy = () => {
+    try {
+      navigator.clipboard?.writeText(text);
+    } catch (e) {}
+    notify('התסריט הועתק', 'copy');
+  };
+  const total = parts.reduce((s, p) => s + p.min, 0);
+  return html`<div class="mx-auto max-w-[820px] px-4 py-6 md:px-8 md:py-8">
+    <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="fb-h1 text-[26px] md:text-[32px]">התסריט <span class="fb-marker">שלך</span></h1>
+        <p class="mt-1 text-[16px] text-muted">עמוד אחד לפתוח לפני כל שיחת מכירה. נבנה מהתרגול ומדף התשובות.</p>
+      </div>
+      <div class="flex gap-2">
+        <${Button} variant="mini" onClick=${copy}><${Icon} name="copy" size=${15} />העתקה<//>
+        <${Button} variant="mini" onClick=${() => notify('ה-PDF ירד, ונשמר בקבצים › מגדילים מכירות', 'download')}><${Icon} name="download" size=${15} />הורדה<//>
+      </div>
+    </div>
+
+    <h2 class="mb-3 flex items-center gap-2 text-[16px] font-bold"><${Icon} name="route" size=${18} class="text-brand-600" />מבנה השיחה<span class="text-[13px] font-bold text-muted">· כ-${total} דקות</span></h2>
+    <ol class="relative mb-8 flex flex-col gap-3 before:absolute before:bottom-4 before:start-[15px] before:top-4 before:w-0.5 before:bg-brand-100">
+      ${parts.map(
+        (p, i) => html`<li key=${p.title} class="relative flex gap-3">
+          <span class="z-[1] grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 text-[14px] font-bold text-white ring-4 ring-canvas">${i + 1}</span>
+          <div class="fb-panel min-w-0 flex-1 !p-4">
+            <p class="mb-0.5 flex flex-wrap items-baseline gap-x-2"><b class="text-[17px]">${p.title}</b><span class="text-[13px] font-bold text-muted">${p.min} דק'</span></p>
+            <p class="mb-2.5 text-[14px] text-muted">${p.goal}</p>
+            <ul class="flex flex-col gap-1.5">
+              ${p.lines.map(([mine, def, ex], j) => html`<li key=${j} class=${cx('rounded-xl px-3 py-2 text-[15px] leading-relaxed', mine ? 'bg-brand-50 ring-1 ring-brand-200' : 'bg-canvas')}>
+                ${mine && html`<span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-brand-600"><${Icon} name="pencil" size=${11} />מהתרגול שלך</span>`}
+                "${clean(mine || def)}"
+                ${ex && html`<span class="mt-1.5 block border-t border-line pt-1.5 text-[13px] text-muted"><b class="text-brand-600">איך זה נשמע אצלך בתרגול:</b> "${clean(ex)}"</span>`}
+              </li>`)}
+            </ul>
+          </div>
+        </li>`,
+      )}
+    </ol>
+
+    <h2 class="mb-3 flex items-center gap-2 text-[16px] font-bold"><${Icon} name="shield-question" size=${18} class="text-brand-600" />התנגדויות נפוצות, ומה עונים</h2>
+    <div class="mb-8 grid gap-2.5 md:grid-cols-2">
+      ${objections.map((r) => {
+        const f = FORMS.find((x) => x.id === r.form);
+        return html`<article key=${r.id} class=${cx('fb-panel !p-4', r.mine && 'ring-2 ring-brand-300')}>
+          <p class="mb-1 flex items-center gap-1.5 text-[12px] font-bold text-muted"><${Icon} name=${f.icon} size=${13} class="text-brand-600" />${f.label}${r.mine && html`<span class="ms-auto"><${Tag} tone="blue">במילים שלך<//></span>`}</p>
+          <p class="mb-1.5 text-[16px] font-bold">"${r.said}"</p>
+          <p class="text-[15px] leading-relaxed">${r.short}</p>
+        </article>`;
+      })}
+    </div>
+    <p class="-mt-5 mb-8 text-[14px] text-muted">התשובות המלאות, עם הדאגה שמאחורי כל משפט, ב<button type="button" class="font-bold text-brand-600 underline underline-offset-2 cursor-pointer" onClick=${onSheet}>דף התשובות</button>.</p>
+
+    ${fixes.length > 0 &&
+    html`<${Note} tone="white" tilt=${-0.6} class="!p-5">
+      <span class="fb-note-kicker">לזכור מהתרגול</span>
+      <ul class="mt-1 flex flex-col gap-2">${fixes.map((f) => html`<li key=${f.k} class="text-[15px]"><b>${f.k}:</b> ${f.alt}</li>`)}</ul>
+    <//>`}
+  </div>`;
 }
