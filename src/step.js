@@ -123,7 +123,9 @@ export function Room({ state, onPick, onAdd, onBuild, onMore, onResume, onTool, 
   };
   const stat = (n, label) => html`<span class="flex flex-col items-center px-3 first:ps-0 last:pe-0"><b class="font-display text-[22px] leading-none text-ink">${n}</b><small class="mt-1 text-[12px] font-bold text-muted">${label}</small></span>`;
 
-  return html`<div class="mx-auto max-w-[1060px] px-4 py-6 md:px-8 md:py-8">
+  return html`<div class="mx-auto max-w-[1200px] px-4 py-6 md:px-8 md:py-8">
+  <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_250px] lg:items-start lg:gap-8">
+  <div class="min-w-0">
     <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div class="min-w-0">
         <h1 class="fb-h1 mb-1 text-[28px] md:text-[34px]">עם מי <span class="fb-marker">מתאמנים</span> היום?</h1>
@@ -149,7 +151,7 @@ export function Room({ state, onPick, onAdd, onBuild, onMore, onResume, onTool, 
       })}
     </div>`}
 
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       ${list.map((c) => {
         const last = lastOf(c.id);
         const form = formOf(c.form);
@@ -187,8 +189,10 @@ export function Room({ state, onPick, onAdd, onBuild, onMore, onResume, onTool, 
     </div>
 
     ${describe && html`<${RealClientSheet} onClose=${() => setDescribe(false)} onSubmit=${submitReal} />`}
-    <h2 class="mb-3 mt-10 text-[15px] font-bold text-muted">עוד בחדר</h2>
-    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+  </div>
+  <aside class="mt-10 lg:sticky lg:top-6 lg:mt-0 lg:rounded-[20px] lg:bg-white/60 lg:p-4 lg:ring-1 lg:ring-line">
+    <h2 class="mb-3 text-[15px] font-bold text-muted">עוד בחדר</h2>
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
       ${[
         ['zap', 'סבב התנגדויות מהיר', 'משפט, תשובה ותיקון. חמש דקות', () => onTool('drill')],
         ['file-search', 'ניתוח שיחה שהייתה', 'מדביקים תמלול, מקבלים מפה', () => onTool('analysis')],
@@ -196,6 +200,8 @@ export function Room({ state, onPick, onAdd, onBuild, onMore, onResume, onTool, 
         ['folder-open', 'מה הלקוחות יודעים', 'ההקשר שממנו הם נבנים', onContext],
       ].map(([icon, label, sub, fn]) => html`<button key=${label} type="button" class="flex items-center gap-3 rounded-2xl border border-line bg-white p-3 text-start transition hover:border-brand-300 cursor-pointer" onClick=${fn}><span class="fb-chip-ic h-10 w-10 shrink-0"><${Icon} name=${icon} size=${18} /></span><span class="min-w-0"><b class="block text-[15px]">${label}</b><small class="block text-[13px] text-muted">${sub}</small></span></button>`)}
     </div>
+  </aside>
+  </div>
   </div>`;
 }
 

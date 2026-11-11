@@ -26,7 +26,7 @@ const KEY = 'flowbiz-pr-state';
 const SCREENS = ['opening', 'room', 'brief', 'call', 'feedback', 'stage', 'drill', 'analysis', 'sheet', 'script', 'done'];
 const PART_OF = { room: 0, brief: 0, drill: 0, analysis: 0, call: 1, feedback: 2, stage: 2, sheet: 3, script: 3 };
 
-const freshState = () => ({ calls: [], added: [], real: [], sheet: SHEET.map((r) => ({ ...r })), drill: { done: 0 }, done: false });
+const freshState = () => ({ calls: [], added: [], real: [], sheet: SHEET.map((r) => ({ ...r })), script: { edits: {}, added: {} }, drill: { done: 0 }, done: false });
 // The mockup always opens the step from zero: no calls, no "מהפעם הקודמת".
 // Progress lives only while the page is open (and across the phone/desktop switch).
 function loadState() {
@@ -356,7 +356,7 @@ function App({ view: shellView, onViewChange }) {
     drill: html`<${Drill} sheet=${state.sheet} onFinish=${() => (patch({ drill: { done: (state.drill?.done || 0) + 1 } }), go({ screen: 'room' }))} />`,
     analysis: html`<${Analysis} notify=${notify} />`,
     sheet: html`<${AnswerSheet} sheet=${state.sheet} setRow=${setRow} notify=${notify} onScript=${() => go({ screen: 'script' })} />`,
-    script: html`<${CallScript} state=${state} notify=${notify} onSheet=${() => go({ screen: 'sheet' })} />`,
+    script: html`<${CallScript} state=${state} setScript=${(p) => setState((s) => ({ ...s, script: { ...(s.script || { edits: {}, added: {} }), ...p } }))} notify=${notify} onSheet=${() => go({ screen: 'sheet' })} />`,
     done: html`<${Done} state=${state} onScript=${() => go({ screen: 'script' })} />`,
   }[screen];
 

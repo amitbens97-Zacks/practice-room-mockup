@@ -127,13 +127,15 @@ export function PrepSheet({ client: c, sheet, calls, onClose, notify }) {
   <//>`;
 }
 
-// "התסריט שלך": one page to open before every sales call. The structure of the call (prompt
-// v2 section 4, in six parts with minutes and ready lines), the common objections with the
-// short answers from the sheet (the user's own words first), and what to remember from the
-// practice. A line the user said well in practice replaces the ready line, marked as theirs.
+// "התסריט שלך": one page to open before every sales call, and the user's to edit. The
+// structure of the call (prompt v2 section 4, in six parts with minutes and ready lines), every
+// objection on the sheet in three steps (ask, answer, close), and what to remember from the
+// practice. A generic line the user said well in practice replaces the ready line, marked as
+// theirs; a client-specific one (opening, summary, fit) is shown under the ready line.
+// Every line can be edited, and lines can be added to each part (state.script).
 function scriptOf(state) {
   const done = state.calls.filter((c) => c.feedback && c.f);
-  const said = (k, ok = () => true) => [...done].reverse().map((c) => c.f[k]).find((x) => x && ok(x)) || null;
+  const said = (k) => [...done].reverse().map((c) => c.f[k]).find(Boolean) || null;
   const mineConfirmed = [...done].reverse().find((c) => c.f.summary && c.f.confirmed)?.f.summary || null;
   const core = CONTEXT.tracks.find((t) => t.core) || CONTEXT.tracks[0];
   const parts = [
@@ -166,7 +168,7 @@ function scriptOf(state) {
       lines: [[said('nextStep'), 'בוא נתקדם. מתי נוח לך השבוע לפגישה הראשונה?']],
     },
   ];
-  const objections = FORMS.map((f) => [...state.sheet.filter((r) => r.form === f.id)].sort((a, b) => (b.mine ? 1 : 0) - (a.mine ? 1 : 0))[0]).filter(Boolean);
+  const objections = FORMS.flatMap((f) => state.sheet.filter((r) => r.form === f.id));
   const fixes = [];
   [...done].reverse().forEach((c) => {
     const fx = c.feedback.fix;
@@ -176,14 +178,27 @@ function scriptOf(state) {
   return { parts, objections, fixes };
 }
 
-export function CallScript({ state, notify, onSheet }) {
+const STEPS = [
+  ['ask', 'שואלים', 'מה באמת מדאיג'],
+  ['reply', 'עונים', 'על הדאגה, עם ההצעה'],
+  ['close', 'סוגרים', 'לולאה, ורק אז מבקשים שוב'],
+];
+
+export function CallScript({ state, setScript, notify, onSheet }) {
   const { parts, objections, fixes } = scriptOf(state);
-  const clean = (t) => t.replace(/^"|"$/g, '');
+  const edits = state.script?.edits || {};
+  const added = state.script?.added || {};
+  const dirty = Object.keys(edits).length > 0 || Object.values(added).some((a) => a.length);
+  const clean = (t) => (t || '').replace(/^"|"$/g, '');
+  const save = (key, v) => setScript({ edits: { ...edits, [key]: v.trim() } });
+  const setAdded = (i, list) => setScript({ added: { ...added, [i]: list } });
+  const lineOf = (i, j, mine, def) => edits[`p${i}.l${j}`] ?? clean(mine || def);
+  const stepOf = (r, k) => edits[`o.${r.id}.${k}`] ?? r[k] ?? '';
   const text = [
     'התסריט שלך לשיחת מכירה',
-    ...parts.map((p, i) => `${i + 1}. ${p.title} (${p.min} דק'): ${p.lines.map(([m, d]) => `"${clean(m || d)}"`).join(' ')}`),
-    'התנגדויות נפוצות:',
-    ...objections.map((r) => `"${r.said}": ${r.short}`),
+    ...parts.map((p, i) => `${i + 1}. ${p.title} (${p.min} דק'): ${[...p.lines.map(([m, d], j) => lineOf(i, j, m, d)), ...(added[i] || [])].filter(Boolean).map((l) => `"${l}"`).join(' ')}`),
+    'התנגדויות ומה עונים:',
+    ...objections.map((r) => `"${r.said}": שואלים: ${stepOf(r, 'ask')} עונים: ${stepOf(r, 'reply')} סוגרים: ${stepOf(r, 'close')}`),
     ...(fixes.length ? ['לזכור מהתרגול:', ...fixes.map((f) => `${f.k}: ${f.alt}`)] : []),
   ].join('\n');
   const copy = () => {
@@ -193,50 +208,74 @@ export function CallScript({ state, notify, onSheet }) {
     notify('התסריט הועתק', 'copy');
   };
   const total = parts.reduce((s, p) => s + p.min, 0);
-  return html`<div class="mx-auto max-w-[820px] px-4 py-6 md:px-8 md:py-8">
+  const editedTag = html`<span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-[#8a5a12]"><${Icon} name="pen-line" size=${11} />נערך</span>`;
+  return html`<div class="mx-auto max-w-[860px] px-4 py-6 md:px-8 md:py-8">
     <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="fb-h1 text-[26px] md:text-[32px]">התסריט <span class="fb-marker">שלך</span></h1>
         <p class="mt-1 text-[16px] text-muted">עמוד אחד לפתוח לפני כל שיחת מכירה. נבנה מהתרגול ומדף התשובות.</p>
+        <p class="mt-1 flex items-center gap-1.5 text-[14px] text-brand-600"><${Icon} name="pencil" size=${14} />כל שורה נערכת: ${g('לוחץ', 'לוחצת')} ${g('ומשנה', 'ומשנה')}, ואפשר להוסיף שורות לכל חלק.</p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
+        ${dirty && html`<${Button} variant="mini" onClick=${() => (setScript({ edits: {}, added: {} }), notify('התסריט חזר לגרסה המקורית', 'rotate-ccw'))}><${Icon} name="rotate-ccw" size=${15} />לגרסה המקורית<//>`}
         <${Button} variant="mini" onClick=${copy}><${Icon} name="copy" size=${15} />העתקה<//>
         <${Button} variant="mini" onClick=${() => notify('ה-PDF ירד, ונשמר בקבצים › מגדילים מכירות', 'download')}><${Icon} name="download" size=${15} />הורדה<//>
       </div>
     </div>
 
     <h2 class="mb-3 flex items-center gap-2 text-[16px] font-bold"><${Icon} name="route" size=${18} class="text-brand-600" />מבנה השיחה<span class="text-[13px] font-bold text-muted">· כ-${total} דקות</span></h2>
-    <ol class="relative mb-8 flex flex-col gap-3 before:absolute before:bottom-4 before:start-[15px] before:top-4 before:w-0.5 before:bg-brand-100">
+    <ol class="mb-8 flex flex-col gap-3">
       ${parts.map(
-        (p, i) => html`<li key=${p.title} class="relative flex gap-3">
-          <span class="z-[1] grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 text-[14px] font-bold text-white ring-4 ring-canvas">${i + 1}</span>
+        (p, i) => html`<li key=${p.title} class="flex gap-3">
+          <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 text-[14px] font-bold text-white">${i + 1}</span>
           <div class="fb-panel min-w-0 flex-1 !p-4">
             <p class="mb-0.5 flex flex-wrap items-baseline gap-x-2"><b class="text-[17px]">${p.title}</b><span class="text-[13px] font-bold text-muted">${p.min} דק'</span></p>
-            <p class="mb-2.5 text-[14px] text-muted">${p.goal}</p>
+            <div class="mb-2.5 text-[14px] text-muted"><${InlineEdit} multiline value=${edits[`p${i}.goal`] ?? p.goal} onSave=${(v) => save(`p${i}.goal`, v)} /></div>
             <ul class="flex flex-col gap-1.5">
-              ${p.lines.map(([mine, def, ex], j) => html`<li key=${j} class=${cx('rounded-xl px-3 py-2 text-[15px] leading-relaxed', mine ? 'bg-brand-50 ring-1 ring-brand-200' : 'bg-canvas')}>
-                ${mine && html`<span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-brand-600"><${Icon} name="pencil" size=${11} />מהתרגול שלך</span>`}
-                "${clean(mine || def)}"
-                ${ex && html`<span class="mt-1.5 block border-t border-line pt-1.5 text-[13px] text-muted"><b class="text-brand-600">איך זה נשמע אצלך בתרגול:</b> "${clean(ex)}"</span>`}
+              ${p.lines.map(([mine, def, ex], j) => {
+                const key = `p${i}.l${j}`;
+                const edited = edits[key] != null;
+                return html`<li key=${j} class=${cx('rounded-xl px-3 py-2 text-[15px] leading-relaxed', edited ? 'bg-[#fdf8ea] ring-1 ring-[#e6cd8e]' : mine ? 'bg-brand-50 ring-1 ring-brand-200' : 'bg-canvas')}>
+                  ${edited ? editedTag : mine && html`<span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-brand-600"><${Icon} name="pencil" size=${11} />מהתרגול שלך</span>`}
+                  <${InlineEdit} multiline value=${lineOf(i, j, mine, def)} onSave=${(v) => save(key, v)} />
+                  ${ex && !edited && html`<span class="mt-1.5 block border-t border-line pt-1.5 text-[13px] text-muted"><b class="text-brand-600">איך זה נשמע אצלך בתרגול:</b> "${clean(ex)}"</span>`}
+                </li>`;
+              })}
+              ${(added[i] || []).map((l, k) => html`<li key=${`a${k}`} class="flex items-start gap-1 rounded-xl bg-[#fdf8ea] px-3 py-2 text-[15px] leading-relaxed ring-1 ring-[#e6cd8e]">
+                <span class="min-w-0 flex-1">${editedTag}<${InlineEdit} multiline value=${l} placeholder="שורה חדשה: ללחוץ ולכתוב" onSave=${(v) => setAdded(i, (added[i] || []).map((x, n) => (n === k ? v : x)).filter((x, n) => n !== k || x.trim()))} /></span>
+                <button type="button" aria-label="מחיקת השורה" class="rounded p-1 text-muted hover:text-ink cursor-pointer" onClick=${() => setAdded(i, (added[i] || []).filter((x, n) => n !== k))}><${Icon} name="x" size=${15} /></button>
               </li>`)}
             </ul>
+            <button type="button" class="mt-2 inline-flex items-center gap-1 text-[13px] font-bold text-brand-600 hover:underline cursor-pointer" onClick=${() => setAdded(i, [...(added[i] || []), ''])}><${Icon} name="plus" size=${14} />להוסיף שורה</button>
           </div>
         </li>`,
       )}
     </ol>
 
-    <h2 class="mb-3 flex items-center gap-2 text-[16px] font-bold"><${Icon} name="shield-question" size=${18} class="text-brand-600" />התנגדויות נפוצות, ומה עונים</h2>
-    <div class="mb-8 grid gap-2.5 md:grid-cols-2">
+    <h2 class="mb-1 flex items-center gap-2 text-[16px] font-bold"><${Icon} name="shield-question" size=${18} class="text-brand-600" />התנגדויות נפוצות, ומה עונים</h2>
+    <p class="mb-3 text-[14px] text-muted">שלושה צעדים לכל התנגדות: שואלים מה באמת מדאיג, עונים על הדאגה עם ההצעה, ובודקים שזה נפתר לפני שמבקשים שוב. לא מתווכחים, לא לוחצים, ולא מורידים מחיר.</p>
+    <div class="mb-3 grid gap-3 md:grid-cols-2">
       ${objections.map((r) => {
         const f = FORMS.find((x) => x.id === r.form);
-        return html`<article key=${r.id} class=${cx('fb-panel !p-4', r.mine && 'ring-2 ring-brand-300')}>
-          <p class="mb-1 flex items-center gap-1.5 text-[12px] font-bold text-muted"><${Icon} name=${f.icon} size=${13} class="text-brand-600" />${f.label}${r.mine && html`<span class="ms-auto"><${Tag} tone="blue">במילים שלך<//></span>`}</p>
-          <p class="mb-1.5 text-[16px] font-bold">"${r.said}"</p>
-          <p class="text-[15px] leading-relaxed">${r.short}</p>
+        return html`<article key=${r.id} class=${cx('fb-panel flex flex-col !p-4', r.mine && 'ring-2 ring-brand-300')}>
+          <p class="mb-1 flex items-center gap-1.5 text-[12px] font-bold text-muted"><${Icon} name=${f.icon} size=${13} class="text-brand-600" />${f.label}${r.mine && html`<span class="ms-auto"><${Tag} tone="blue">ענית בתרגול<//></span>`}</p>
+          <p class="text-[17px] font-bold">"${r.said}"</p>
+          <p class="mb-3 text-[13px] text-muted">מה באמת מדאיג: ${r.worry}</p>
+          <ol class="flex flex-col gap-2">
+            ${STEPS.map(([k, label, sub], n) => {
+              const edited = edits[`o.${r.id}.${k}`] != null;
+              return html`<li key=${k} class="flex items-start gap-2">
+                <span class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-600">${n + 1}</span>
+                <span class="min-w-0 flex-1 text-[15px] leading-relaxed"><b class="text-[13px] text-brand-600">${label}</b> <small class="text-[12px] text-faint">${sub}</small>${edited && html` <small class="text-[12px] font-bold text-[#8a5a12]">· נערך</small>`}<br /><${InlineEdit} multiline value=${stepOf(r, k)} onSave=${(v) => save(`o.${r.id}.${k}`, v)} /></span>
+              </li>`;
+            })}
+          </ol>
+          ${r.honest && html`<p class="mt-3 flex items-start gap-1.5 rounded-xl bg-warn-50 px-3 py-2 text-[13px] text-ink"><${Icon} name="scale" size=${14} class="mt-0.5 shrink-0 text-warn" /><span>${r.honest}</span></p>`}
+          ${r.mine && html`<p class="mt-2 rounded-xl bg-brand-50 px-3 py-2 text-[13px]"><b class="block text-brand-600">איך ענית בתרגול</b>${r.answer}</p>`}
         </article>`;
       })}
     </div>
-    <p class="-mt-5 mb-8 text-[14px] text-muted">התשובות המלאות, עם הדאגה שמאחורי כל משפט, ב<button type="button" class="font-bold text-brand-600 underline underline-offset-2 cursor-pointer" onClick=${onSheet}>דף התשובות</button>.</p>
+    <p class="mb-8 text-[14px] text-muted">גרסה קצרה לוואטסאפ לכל התנגדות, ב<button type="button" class="font-bold text-brand-600 underline underline-offset-2 cursor-pointer" onClick=${onSheet}>דף התשובות</button>.</p>
 
     ${fixes.length > 0 &&
     html`<${Note} tone="white" tilt=${-0.6} class="!p-5">
