@@ -235,6 +235,7 @@ export function Feedback({ call, onPractice, notify }) {
 
     ${tab === 'hidden' &&
     html`<div>
+      ${client.real && html`<p class="mb-3 rounded-xl bg-[#fdf8ea] px-3 py-2 text-[14px] text-ink ring-1 ring-[#e6cd8e]">${client.first} ${client.fem ? 'נבנתה' : 'נבנה'} מהתיאור שלך. מה שמסומן "השערה" או "לא נאמר בתיאור" לא הגיע ממך. כדאי לבדוק את זה בשיחה האמיתית.</p>`}
       <p class="mb-3 text-[15px] text-muted">בשיחה אמיתית את זה לא רואים. ${client.first} ${client.fem ? 'חשפה' : 'חשף'} שכבה רק אחרי שאלה טובה. כאן רואים מה עוד היה שם.</p>
       <section class="fb-panel !p-4">
         <p class="mb-2 text-[15px]">${H.who}. ${client.fem ? 'אמרה שהיא כאן כי' : 'אמר שהוא כאן כי'}: "${H.stated}".</p>

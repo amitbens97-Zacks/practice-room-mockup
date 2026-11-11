@@ -350,6 +350,61 @@ export const CLIENTS = [
 export const BASE_CLIENTS = CLIENTS.filter((c) => !c.pool);
 export const POOL_CLIENTS = CLIENTS.filter((c) => c.pool);
 
+// ---------- "לקוח אמיתי שלי": a client the user describes, before a real call ----------
+// The user writes who it is, what they wrote, and what worries them, in the client's own
+// words. In production the model turns that into a full client (prompt 5.1) and marks what
+// it guessed. Without a model, the mockup fills the rest by the objection form, and says so.
+const GUESS = 'לא נאמר בתיאור';
+const CONDITION_BY_FORM = {
+  time: 'דרך שלא לוקחת שעות כל שבוע',
+  money: 'לראות שזה מחזיר את עצמו, בלי הנחה',
+  fit: 'לשמוע שזה נבנה לעסק כמו שלו, לא תבנית כללית',
+  authority: 'שמי שמחליט איתו ישמע את זה ישירות',
+  avoid: 'שישאלו מה בדיוק צריך לחשוב, ושיקבל צעד שהוא בטוח בו',
+};
+const OBSTACLE_KEY = { time: 'time', money: 'budget', fit: 'tries', authority: 'decider', avoid: 'budget' };
+export function clientFromDescription(d, hidden) {
+  const form = FORMS.find((f) => f.id === d.form) || FORMS[0];
+  const worry = (d.worry || '').trim() || form.sounds;
+  const he = (m, f) => (d.fem ? f : m);
+  return {
+    id: `real-${Date.now().toString(36)}`,
+    real: true,
+    desc: d,
+    name: d.first.trim(),
+    first: d.first.trim(),
+    fem: !!d.fem,
+    who: d.who.trim(),
+    from: (d.from || '').trim() || he('לקוח שלך, מהחיים', 'לקוחה שלך, מהחיים'),
+    said: d.said.trim(),
+    form: form.id,
+    tag: worry.length <= 26 ? `"${worry}"` : form.label,
+    tagFrom: 'מהתיאור שלך',
+    tint: '#fbf1d6',
+    obstacleKey: OBSTACLE_KEY[form.id],
+    partner: form.id === 'authority' ? he('מי שמחליט איתו', 'מי שמחליט איתה') : undefined,
+    hidden: hidden || {
+      who: `${d.first.trim()}. ${d.who.trim()}`,
+      stated: d.said.trim(),
+      motive: `${GUESS}. במוק-אפ: ${he('שהעסק יעבוד בשבילו, ולא הוא בשבילו', 'שהעסק יעבוד בשבילה, ולא היא בשבילו')}`,
+      tries: (d.tries || '').trim() ? [d.tries.trim()] : [GUESS],
+      need: `${GUESS}. במוק-אפ: לדעת בדיוק מה לעשות, ולראות שזה עובד`,
+      fit: { kind: 'fit', track: 'core', text: 'במוק-אפ: מתאים לתוכנית הליווי. במערכת המודל בודק את התיאור מול המסלולים, ויכול לקבוע גם "מסלול אחר" או "לא מתאים"' },
+      obstacle: worry,
+      decider: form.id === 'authority' ? he('כן: עוד מישהו מחליט איתו', 'כן: עוד מישהו מחליט איתה') : GUESS,
+      budget: form.id === 'money' ? 'לחוץ' : GUESS,
+      character: (d.known || '').trim() || GUESS,
+      objection: worry,
+      condition: CONDITION_BY_FORM[form.id],
+    },
+  };
+}
+// Clients added at run time (the pool is static; real clients are not).
+export function registerClient(c) {
+  if (!CLIENTS.some((x) => x.id === c.id)) CLIENTS.push(c);
+  return c;
+}
+
 // ---------- The answer sheet ("דף תשובות להתנגדויות") ----------
 // It starts from the client file, the offer and the audience's common objections.
 // After every call the rows that came up are rewritten in the user's own words.

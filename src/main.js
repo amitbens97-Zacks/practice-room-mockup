@@ -9,7 +9,7 @@
 // ?user=f, ?embed = phone layout. Shift+D opens the developer notes.
 import { html, render, useState, useEffect, useRef, Icon } from './lib.js';
 import { PartnerBubble, Progress, TopBar, BottomBar, Status, PrimaryButton, Button, Toast } from './components.js';
-import { STEP, PARTS, CLIENTS, SHEET, SHEET_FROM_SAMPLE, SAMPLE_CALL, SAMPLE_FEEDBACK, STAGE_DRILL, g } from './data.js';
+import { STEP, PARTS, CLIENTS, FORMS, SHEET, SHEET_FROM_SAMPLE, SAMPLE_CALL, SAMPLE_FEEDBACK, STAGE_DRILL, clientFromDescription, registerClient, g } from './data.js';
 import { newCall, userSays, hintFor, feedbackFor, talkRatio } from './coach.js';
 import * as ai from './ai.js';
 import { hasAI } from './ai.js';
@@ -25,7 +25,7 @@ const KEY = 'flowbiz-pr-state';
 const SCREENS = ['opening', 'room', 'brief', 'call', 'feedback', 'stage', 'drill', 'analysis', 'sheet', 'done'];
 const PART_OF = { room: 0, brief: 0, drill: 0, analysis: 0, call: 1, feedback: 2, stage: 2, sheet: 3 };
 
-const freshState = () => ({ calls: [], added: [], sheet: SHEET.map((r) => ({ ...r })), drill: { done: 0 }, done: false });
+const freshState = () => ({ calls: [], added: [], real: [], sheet: SHEET.map((r) => ({ ...r })), drill: { done: 0 }, done: false });
 // The mockup always opens the step from zero: no calls, no "מהפעם הקודמת".
 // Progress lives only while the page is open (and across the phone/desktop switch).
 function loadState() {
@@ -67,6 +67,7 @@ const SHARK_LINE = {
 
 function App({ view: shellView, onViewChange }) {
   const handoff = useRef(takeHandoff()).current;
+  (handoff?.state?.real || []).forEach(registerClient);
   const [route, setRoute] = useState(handoff?.route || startRoute());
   const [state, setState] = useState(handoff?.state || loadState());
   const [level, setLevel] = useState(2);
@@ -235,6 +236,21 @@ function App({ view: shellView, onViewChange }) {
   };
   const retry = () => startCall(call.clientId, call.level);
 
+  // "לקוח אמיתי שלך": with a key the model builds the hidden state from the description;
+  // without one (or if the call fails), the description alone is used.
+  const buildReal = async (d) => {
+    let hidden = null;
+    if (hasAI()) {
+      try {
+        const H = await ai.buildClient(d, FORMS.find((f) => f.id === d.form)?.label);
+        hidden = { ...H, tries: H.tries?.length ? H.tries : ['השערה: לא ידוע'] };
+      } catch (e) {
+        notify('המודל לא זמין כרגע. הלקוח נבנה מהתיאור בלבד', 'info');
+      }
+    }
+    return registerClient(clientFromDescription(d, hidden));
+  };
+
   const hasFeedback = state.calls.some((c) => c.feedback);
   const finishStep = () => {
     patch({ done: true });
@@ -308,7 +324,8 @@ function App({ view: shellView, onViewChange }) {
     room: html`<${Room}
       state=${state}
       onPick=${(id) => go({ screen: 'brief', clientId: id })}
-      onAdd=${(id) => setState((s) => ({ ...s, added: [...(s.added || []), id] }))}
+      onAdd=${(id, c) => setState((s) => ({ ...s, added: [...(s.added || []), id], real: c ? [...(s.real || []), c] : s.real || [] }))}
+      onBuild=${buildReal}
       onMore=${() => notify('במערכת: לקוח חדש בכל לחיצה, שהמודל בונה מתיק הלקוח. במוק-אפ יש ארבעה נוספים', 'user-plus')}
       onResume=${(c) => (STAGE_DRILL[c.feedback.next?.stageN] ? go({ screen: 'stage', stageN: c.feedback.next.stageN, clientId: c.clientId, callId: c.id }) : go({ screen: 'brief', clientId: c.clientId }))}
       onTool=${(t) => go({ screen: t })}

@@ -3,7 +3,7 @@
 // tools.js; the answer sheet is in sheet.js.
 import { html, useState, useEffect, Icon, cx, confetti, money, PencilLine } from './lib.js';
 import { Button, Note, StepHeading, SharkAvatar } from './components.js';
-import { Sheet, Tag } from './ui.js';
+import { Sheet, Tag, Field, Chips, inputCls } from './ui.js';
 import { USER, CLIENTS, POOL_CLIENTS, CONTEXT, CLIENT_FILE, FORMS, LEVELS, GROUPS, STAGES, PARTS, g } from './data.js';
 
 export const formOf = (id) => FORMS.find((f) => f.id === id);
@@ -56,11 +56,13 @@ export function Opening() {
 // client from the client file, so the practice does not run out after three calls. Each card
 // shows the levels already practised with that client, to invite a harder round.
 // The tools sit quietly at the bottom.
-export function Room({ state, onPick, onAdd, onMore, onResume, onTool, onContext, onSheet }) {
+export function Room({ state, onPick, onAdd, onBuild, onMore, onResume, onTool, onContext, onSheet }) {
   const [building, setBuilding] = useState(false);
+  const [describe, setDescribe] = useState(false);
+  const [buildingReal, setBuildingReal] = useState(null);
   const [filter, setFilter] = useState('all');
   const added = state.added || [];
-  const shown = CLIENTS.filter((c) => !c.pool || added.includes(c.id));
+  const shown = CLIENTS.filter((c) => (!c.pool && !c.real) || added.includes(c.id));
   const left = POOL_CLIENTS.filter((c) => !added.includes(c.id));
   const done = state.calls.filter((c) => c.feedback);
   const lastOf = (id) => [...done].reverse().find((c) => c.clientId === id);
@@ -80,6 +82,18 @@ export function Room({ state, onPick, onAdd, onMore, onResume, onTool, onContext
       onAdd(left[0].id);
       setBuilding(false);
     }, 1100);
+  };
+  // A real client: build it (the model, or the description alone), then show it.
+  const submitReal = async (d) => {
+    setDescribe(false);
+    setFilter('all');
+    setBuildingReal(d.first.trim());
+    const t0 = Date.now();
+    const c = await onBuild(d);
+    setTimeout(() => {
+      onAdd(c.id, c);
+      setBuildingReal(null);
+    }, Math.max(0, 1100 - (Date.now() - t0)));
   };
   const stat = (n, label) => html`<span class="flex flex-col items-center px-3 first:ps-0 last:pe-0"><b class="font-display text-[22px] leading-none text-ink">${n}</b><small class="mt-1 text-[12px] font-bold text-muted">${label}</small></span>`;
 
@@ -117,7 +131,7 @@ export function Room({ state, onPick, onAdd, onMore, onResume, onTool, onContext
         const rec = c.id === next && !lastFix;
         const isNew = c.id === fresh && !last;
         return html`<button key=${c.id} type="button" class=${cx('fb-panel group relative flex flex-col !p-0 text-start transition hover:-translate-y-0.5 hover:border-brand-600 cursor-pointer', rec && '!border-brand-600 ring-4 ring-brand-100', isNew && 'rise')} onClick=${() => onPick(c.id)}>
-          ${(rec || isNew) && html`<span class=${cx('absolute -top-3 end-4 rounded-full px-3 py-0.5 text-[12px] font-bold text-white', rec ? 'bg-brand-600' : 'bg-money')}>${rec ? 'מומלץ להתחיל' : 'חדש בחדר'}</span>`}
+          ${(rec || isNew || c.real) && html`<span class=${cx('absolute -top-3 end-4 rounded-full px-3 py-0.5 text-[12px] font-bold text-white', c.real ? 'bg-[#a8701a]' : rec ? 'bg-brand-600' : 'bg-money')}>${c.real ? (c.fem ? 'הלקוחה שלך' : 'הלקוח שלך') : rec ? 'מומלץ להתחיל' : 'חדש בחדר'}</span>`}
           <span class="flex items-center gap-3 p-4 pb-3">
             <${Avatar} client=${c} size=${52} />
             <span class="min-w-0"><b class="block font-display text-[19px] leading-tight">${c.name}</b><small class="block text-[14px] text-muted">${c.who}</small></span>
@@ -139,8 +153,14 @@ export function Room({ state, onPick, onAdd, onMore, onResume, onTool, onContext
           ? html`<span class="grid h-12 w-12 place-items-center rounded-full bg-brand-50"><span class="fb-spin" style=${{ width: 20, height: 20, borderColor: '#2f5fc4', borderTopColor: 'transparent' }}></span></span><b class="font-display text-[18px]">בונה לקוח חדש...</b><small class="max-w-[30ch] text-[14px] text-muted">מתיק הלקוח, מהסל ומההצעה שלך. עסק אחר, דאגה אחרת.</small>`
           : html`<span class="grid h-12 w-12 place-items-center rounded-full bg-brand-600 text-white transition group-hover:scale-105"><${Icon} name="user-plus" size=${22} /></span><b class="font-display text-[19px]">לקוח חדש</b><small class="max-w-[30ch] text-[14px] text-muted">עוד לקוח מאותו קהל, עם דאגה שעוד לא פגשת. אפשר להוסיף כמה שרוצים.</small>`}
       </button>`}
+      ${filter === 'all' && html`<button type="button" onClick=${() => !buildingReal && setDescribe(true)} aria-busy=${!!buildingReal} class="group flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-[18px] border-2 border-[#e6cd8e] bg-[#fdf8ea] p-5 text-center transition hover:border-[#a8701a] cursor-pointer">
+        ${buildingReal
+          ? html`<span class="grid h-12 w-12 place-items-center rounded-full bg-[#f7ebc8]"><span class="fb-spin" style=${{ width: 20, height: 20, borderColor: '#a8701a', borderTopColor: 'transparent' }}></span></span><b class="font-display text-[18px]">בונה את ${buildingReal}...</b><small class="max-w-[30ch] text-[14px] text-muted">מהתיאור שלך, ומה שחסר מתיק הלקוח.</small>`
+          : html`<span class="grid h-12 w-12 place-items-center rounded-full bg-[#a8701a] text-white transition group-hover:scale-105"><${Icon} name="notebook-pen" size=${21} /></span><b class="font-display text-[19px]">לקוח אמיתי שלך</b><small class="max-w-[32ch] text-[14px] text-muted">יש שיחה אמיתית בקרוב? ${g('תאר', 'תארי')} את הלקוח, ו${g('תתאמן', 'תתאמני')} עליו לפני.</small>`}
+      </button>`}
     </div>
 
+    ${describe && html`<${RealClientSheet} onClose=${() => setDescribe(false)} onSubmit=${submitReal} />`}
     <h2 class="mb-3 mt-10 text-[15px] font-bold text-muted">עוד בחדר</h2>
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       ${[
@@ -151,6 +171,39 @@ export function Room({ state, onPick, onAdd, onMore, onResume, onTool, onContext
       ].map(([icon, label, sub, fn]) => html`<button key=${label} type="button" class="flex items-center gap-3 rounded-2xl border border-line bg-white p-3 text-start transition hover:border-brand-300 cursor-pointer" onClick=${fn}><span class="fb-chip-ic h-10 w-10 shrink-0"><${Icon} name=${icon} size=${18} /></span><span class="min-w-0"><b class="block text-[15px]">${label}</b><small class="block text-[13px] text-muted">${sub}</small></span></button>`)}
     </div>
   </div>`;
+}
+
+// "לקוח אמיתי שלך": the user describes a client before a real call, in the client's words.
+export function RealClientSheet({ onClose, onSubmit }) {
+  const [d, setD] = useState({ first: '', fem: false, who: '', from: '', said: '', form: '', worry: '', tries: '', known: '' });
+  const set = (k) => (e) => setD({ ...d, [k]: e.target.value });
+  const he = (m, f) => (d.fem ? f : m);
+  const ok = d.first.trim() && d.who.trim() && d.said.trim() && d.form;
+  const ta = 'w-full resize-none rounded-xl border-[1.5px] border-line bg-white px-3 py-2.5 text-[16px] text-ink outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100';
+  const form = d.form && formOf(d.form);
+  const his = he('שלו', 'שלה');
+  return html`<${Sheet}
+    title=${`${g('תאר', 'תארי')} לקוח אמיתי`}
+    wide
+    onClose=${onClose}
+    footer=${html`<small class="flex items-center gap-1.5 text-[13px] text-muted"><${Icon} name="lock" size=${13} />נשמר רק אצלך, ומשמש רק לתרגול</small><${Button} disabled=${!ok} onClick=${() => ok && onSubmit(d)}>לבנות את הלקוח<//>`}
+  >
+    <p class="mb-4 text-[15px] text-muted">יש שיחה אמיתית בקרוב? מה ${g('שתכתוב', 'שתכתבי')} נכנס כמו שהוא, ומה שחסר משלימים מתיק הלקוח ומסמנים כהשערה. ככל ${g('שתכתוב', 'שתכתבי')} יותר במילים ${his}, השיחה קרובה יותר לאמיתית.</p>
+    <div class="grid gap-x-3 sm:grid-cols-[1fr_auto]">
+      <${Field} label="שם"><input class=${inputCls} value=${d.first} onInput=${set('first')} placeholder="למשל: שירן" /><//>
+      <div class="mb-4"><span class="mb-1 block text-[14px] font-bold text-ink">לשון</span><${Chips} small options=${[{ id: 'm', label: 'הוא' }, { id: 'f', label: 'היא' }]} value=${d.fem ? 'f' : 'm'} onChange=${(v) => setD({ ...d, fem: v === 'f' })} /></div>
+    </div>
+    <${Field} label=${he('מי הוא', 'מי היא')} hint="עיסוק, וכמה גדול העסק"><input class=${inputCls} value=${d.who} onInput=${set('who')} placeholder=${he('מתקין פרגולות, 2 עובדים', 'בעלת סטודיו לפילאטיס, 2 מדריכות')} /><//>
+    <${Field} label=${he('מה הוא כתב או אמר לך', 'מה היא כתבה או אמרה לך')} hint=${`כמו שזה הגיע, במילים ${his}`}><textarea rows="2" class=${ta} value=${d.said} onInput=${set('said')} placeholder="ראיתי את הפוסט שלך. כמה זה עולה?"></textarea><//>
+    <div class="mb-4">
+      <span class="mb-1 block text-[14px] font-bold text-ink">${he('מה הכי מדאיג אותו', 'מה הכי מדאיג אותה')}</span>
+      <${Chips} small options=${FORMS.map((f) => ({ id: f.id, label: f.label }))} value=${d.form} onChange=${(v) => setD({ ...d, form: v })} />
+      <input class=${cx(inputCls, 'mt-2')} value=${d.worry} onInput=${set('worry')} placeholder=${form ? `במילים ${his}, למשל: "${form.sounds}"` : `במילים ${his} (לא חובה)`} />
+    </div>
+    <${Field} label=${he('מאיפה הגיע', 'מאיפה הגיעה')} hint="לא חובה"><input class=${inputCls} value=${d.from} onInput=${set('from')} placeholder=${he('השאיר פרטים אחרי הרצאה', 'השאירה פרטים אחרי הרצאה')} /><//>
+    <${Field} label=${he('מה הוא כבר ניסה', 'מה היא כבר ניסתה')} hint=${`לא חובה. במילים ${his}`}><input class=${inputCls} value=${d.tries} onInput=${set('tries')} placeholder='"ניסיתי פרסום בפייסבוק, לא הביא כלום"' /><//>
+    <${Field} label="עוד משהו שחשוב לדעת" hint="לא חובה. תקציב, מי עוד מחליט, אופי" class="!mb-0"><textarea rows="2" class=${ta} value=${d.known} onInput=${set('known')} placeholder=${he('ענייני, ממהר, יש לו שותף', 'עניינית, ממהרת, יש לה שותף')}></textarea><//>
+  <//>`;
 }
 
 // What goes into the context block (prompt section 9), as the user sees it.
@@ -182,6 +235,7 @@ export function Brief({ client, level, setLevel }) {
     <section class="fb-panel mb-4 !p-4">
       <p class="mb-1 text-[13px] font-bold text-muted">${client.from}</p>
       <p class="text-[17px]">${client.fem ? 'כתבה' : 'כתב'}: <b>"${client.said}"</b></p>
+      ${client.real && html`<p class="mt-2 flex items-start gap-1.5 border-t border-line pt-2 text-[14px] text-muted"><${Icon} name="notebook-pen" size=${14} class="mt-0.5 shrink-0" />נבנה מהתיאור שלך. מה שלא כתבת הושלם כהשערה, ומסומן במשוב.</p>`}
     </section>
     <section class="mb-6 flex items-start gap-3 rounded-2xl bg-brand-50 p-4">
       <span class="fb-chip-ic h-9 w-9 shrink-0"><${Icon} name="target" size=${18} /></span>

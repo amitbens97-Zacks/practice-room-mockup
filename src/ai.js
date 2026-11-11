@@ -160,6 +160,64 @@ export async function clientTurn(call) {
   return { reply: out.reply, stage: Math.max(0, Math.min(15, out.stage | 0)), outcome: out.outcome === 'none' ? null : out.outcome };
 }
 
+// ---------- "לקוח אמיתי שלי": the hidden state of a client the user described ----------
+const S = { type: 'string' };
+const CLIENT_SCHEMA = {
+  type: 'object',
+  properties: {
+    who: { type: 'string', description: 'שם, גיל משוער, עיסוק, ותק והיקף העסק' },
+    stated: S,
+    motive: S,
+    tries: { type: 'array', items: S },
+    need: S,
+    fit: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['fit', 'other', 'none'] },
+        track: { type: 'string', enum: ['core', 'vip', 'workshop', 'none'] },
+        text: S,
+      },
+      required: ['kind', 'track', 'text'],
+      additionalProperties: false,
+    },
+    obstacle: S,
+    decider: S,
+    budget: S,
+    character: S,
+    objection: S,
+    condition: S,
+  },
+  required: ['who', 'stated', 'motive', 'tries', 'need', 'fit', 'obstacle', 'decider', 'budget', 'character', 'objection', 'condition'],
+  additionalProperties: false,
+};
+
+export async function buildClient(d, formLabel) {
+  const he = (m, f) => (d.fem ? f : m);
+  const system = [
+    'מצב פעיל: בניית לקוח לתרגול. אל תשחק את הדמות עכשיו ואל תציג את התפריט. החזר רק את המצב הנסתר לפי 5.1.',
+    trainee(),
+    [
+      'המתאמן תיאר לקוח אמיתי שלו, כדי להתאמן לפני שיחה אמיתית איתו. בנה ממנו מצב נסתר מלא לפי 5.1, נאמן לתיאור:',
+      '- מה שכתוב בתיאור הוא עובדה. אל תשנה אותו ואל תסתור אותו.',
+      '- מה שחסר, השלם באופן סביר מהעיסוק ומבלוק ההקשר, והתחל כל שדה שהשלמת במילה "השערה:". בלי מספרים מדויקים שלא נאמרו.',
+      '- התאמה אמיתית (3.6): בדוק בכנות מול המסלולים בבלוק. core = המוצר המרכזי, vip = יום VIP, workshop = הסדנה. kind=none ו-track=none אם שום מסלול לא עונה על מה שתואר. אל תטה ל"מתאים" כי זה לקוח של המתאמן.',
+      '- ההתנגדות העיקרית היא הדאגה שהמתאמן תיאר, במילים שלו.',
+      `- ${he('הלקוח גבר', 'הלקוחה אישה')}. כתוב את השדות בגוף שלישי.`,
+    ].join('\n'),
+    [
+      'התיאור:',
+      `- שם: ${d.first}`,
+      `- מי: ${d.who}`,
+      `- איך הגיע: ${d.from || 'לא נאמר'}`,
+      `- מה כתב או אמר: "${d.said}"`,
+      `- מה מדאיג (צורה: ${formLabel}): ${d.worry || 'לא נאמר במילים שלו'}`,
+      `- מה כבר ניסה: ${d.tries || 'לא נאמר'}`,
+      `- עוד ידוע: ${d.known || 'לא נאמר'}`,
+    ].join('\n'),
+  ].join('\n\n');
+  return ask({ system, messages: [{ role: 'user', content: 'בנה את המצב הנסתר של הלקוח.' }], schema: CLIENT_SCHEMA, effort: 'medium', maxTokens: 6000 });
+}
+
 // ---------- "/רמז" ----------
 const HINT_SCHEMA = {
   type: 'object',

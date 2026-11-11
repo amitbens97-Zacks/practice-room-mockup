@@ -34,7 +34,7 @@ const IS = {
   threeQ: R(/בעמדה להחליט|בנוח לעבוד|פותר את/),
   close: R(/נתקדם|נקבע|נסגור|קישור|ראשון או|מתחילים|לסגור/),
   nextStep: R(/מחר|היום ב|ב-?\d{1,2}(:\d\d)?\b|יום (ראשון|שני|שלישי|רביעי|חמישי)/),
-  urgency: R(/רק (היום|עד)|נשאר(ו)? (לי )?(רק )?מקום|המחיר עולה|מבצע|לפני שייגמר/),
+  urgency: R(/רק (היום|עד)|נשאר(ו)? (לי )?(רק )?מקום|המחיר עולה|(יש|עכשיו|רק עכשיו) מבצע|מבצע (רק|עד|מיוחד|לזמן)|לפני שייגמר/),
   discount: R(/הנחה|אוריד|להוריד (את )?המחיר/),
   argue: R(/אבל (את|אתה) לא|(את|אתה) טועה|זה לא נכון|לא הבנת/),
   giveup: R(/תחשוב(י)?( על זה)? ותחזור|תחזור(י)? אליי|תחשבי ותחזרי/),
@@ -270,6 +270,60 @@ const LINES = {
     fitAlt: `"אגיד לך בכנות: התוכנית שלי בונה איתך מערך שאתה מוביל, ואתה רוצה שמישהו יעשה בשבילך. היא לא מתאימה לך. מה שכן: מנהל קמפיינים מקומי, ותזכורת שירות ללקוחות הקבועים. רוצה שאחבר אותך?"`,
   },
 };
+// ---------- A client the user described ("לקוח אמיתי שלי") ----------
+// The rule engine has no written lines for them, so the lines are built from the
+// description: what they wrote, the worry in their words, what they tried, and the
+// objection form. With a model, the client is played from the hidden state instead.
+const WORRY_BY_FORM = {
+  time: 'שזה ייקח לי זמן שאין לי.',
+  money: 'שאשים כסף, ולא אראה שזה חוזר.',
+  fit: 'שזה לא בשביל עסק כמו שלי.',
+  authority: 'שבבית, או השותף, יגידו שזה בזבוז.',
+  avoid: '(שקט) האמת? הכסף. ולא בטוח שזה הזמן.',
+};
+function genericLines(c) {
+  const d = c.desc || {};
+  const s = (m, f) => (c.fem ? f : m);
+  const worry = (d.worry || '').trim() || c.hidden.objection;
+  const tries = (d.tries || '').trim();
+  const end = (t) => (/[.!?]$/.test(t) ? t : `${t}.`);
+  return {
+    about: [end(`אני ${c.who}`), 'מה עוד לספר... זה בגדול.'],
+    turn: ['{you} {called} אליי. {tellImp} {you2}.', `כן, אני ${s('מקשיב', 'מקשיבה')}.`],
+    idle: ['כן?', `לא ${s('בטוח', 'בטוחה')} שהבנתי.`, '(מחכה) ו...?'],
+    hello: [`היי. יש לי כמה דקות, אני ${s('מקשיב', 'מקשיבה')}.`],
+    frame: ['בסדר.'],
+    whyNow: [end(c.said), 'זה מה שכתבתי.'],
+    numbers: ['בערך כמו בשנה שעברה. לא משהו שמתקדם.'],
+    tries: [tries ? end(tries) : 'ניסיתי כמה דברים לבד. שום דבר לא החזיק.'],
+    likes: ['מה שעבד, עבד קצת. לא היה מי שמחזיק את זה איתי.'],
+    motive: [`(שקט) שהעסק יעבוד בשבילי, ולא אני בשבילו. נמאס לי לרוץ אחרי כל לקוח.`],
+    budget: [c.form === 'money' ? 'כרגע זה לחוץ. תלוי כמה.' : 'יש משהו. תלוי במה.'],
+    decider: [c.form === 'authority' ? `אני לא ${s('מחליט', 'מחליטה')} לבד. יש עוד מישהו שצריך להסכים.` : `אני ${s('מחליט', 'מחליטה')}.`],
+    time: [c.form === 'time' ? 'אין לי הרבה. שעה בשבוע, אולי.' : 'שעתיים בשבוע אפשר למצוא.'],
+    success: ['שאבין אם זה מתאים לי, בלי לחץ.'],
+    objection: [end(worry), `כן, אבל עדיין: ${worry.replace(/[.!?]$/, '')}.`],
+    worry: [WORRY_BY_FORM[c.form] || WORRY_BY_FORM.fit],
+    isolate: ['לא, זה העיקר.'],
+    need: ['לדעת בדיוק מה לעשות, ולראות שזה עובד. לא עוד משהו שאני מתחיל ונוטש.'.replace('מתחיל ונוטש', s('מתחיל ונוטש', 'מתחילה ונוטשת'))],
+    deeper: ['זה מה שמעסיק אותי כבר כמה חודשים.', `כי אם זה לא ישתנה, אני לא ${s('יודע', 'יודעת')} כמה עוד אחזיק ככה.`],
+    fitYes: [`נשמע כמו מה שאני ${s('צריך', 'צריכה')}. איך זה עובד?`],
+    fitNo: ['אה. אז מה כן?'],
+    fitOther: [`אולי. ${g('ספר', 'ספרי')} לי עוד.`],
+    handled: 'אוקיי. זה כבר נשמע אחרת.',
+    fitAlt: '"ממה שתיארת, מה שחייב להיות זה ___. זה בדיוק מה ש___ עושה. רוצה לשמוע איך?"',
+  };
+}
+// Hook words of a described client: the longer words of what they wrote and worry about.
+const STOP = new Set(['אבל', 'שלי', 'שלך', 'רוצה', 'רציתי', 'לשמוע', 'אשמח', 'עכשיו', 'בעצם', 'האמת', 'משהו', 'שאני', 'אצלי', 'כבר', 'היום', 'יותר']);
+function genericWords(c) {
+  const d = c.desc || {};
+  const text = [c.said, d.worry, d.tries, d.who].filter(Boolean).join(' ');
+  const words = [...new Set(text.replace(/[^\u0590-\u05FF0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length >= 4 && !STOP.has(w)))];
+  return words.slice(0, 8).map((w) => new RegExp(w.replace(/[ךםןףץ]$/, (ch) => `[${ch}${{ ך: 'כ', ם: 'מ', ן: 'נ', ף: 'פ', ץ: 'צ' }[ch]}]`)));
+}
+const linesOf = (c) => LINES[c.id] || (LINES[c.id] = genericLines(c));
+const wordsOf = (c) => CLIENT_WORDS[c.id] || (CLIENT_WORDS[c.id] = genericWords(c));
 // One fixed line of a client, or the default when the client has none.
 const lineOf = (L, k, dflt) => fill(L[k] == null ? dflt : Array.isArray(L[k]) ? L[k][0] : L[k]);
 // Which track a fit sentence points to, and which is right for each client (data.js hidden.fit).
@@ -303,7 +357,7 @@ const priceTrack = (t) => (/890|סדנ/.test(t) ? 'workshop' : /3,?900|VIP|יו�
 // One user message in, the client's reply out. Returns the new call state.
 export function userSays(call, text) {
   const c = CLIENTS.find((x) => x.id === call.clientId);
-  const L = LINES[c.id];
+  const L = linesOf(c);
   const f = { ...call.f };
   const st = { ...call, f, msgs: [...call.msgs, { who: 'me', text }], turns: call.turns + 1 };
   const reach = (k) => {
@@ -459,7 +513,7 @@ export function userSays(call, text) {
   if (IS.summary(text)) {
     reach('summary');
     f.summary = text;
-    const hits = (CLIENT_WORDS[c.id] || []).filter((re) => re.test(text)).length;
+    const hits = wordsOf(c).filter((re) => re.test(text)).length;
     if (hits >= 2) {
       st.warm += 2;
       f.confirmed = true;
@@ -597,7 +651,7 @@ const short = (t, n = 48) => (t.length <= n ? t : `${t.slice(0, t.lastIndexOf(' 
 // The sentence of a client line that holds the hook word.
 function hookOf(c, text) {
   const t = clean(text);
-  for (const re of CLIENT_WORDS[c.id] || []) {
+  for (const re of wordsOf(c)) {
     if (!re.test(t)) continue;
     const s = t.split(/(?<=[.?!])\s+/).find((x) => re.test(x)) || t;
     return { re, quote: short(s.replace(/[.]$/, '')) };
@@ -633,7 +687,7 @@ export function hintFor(call) {
   // An objection on the table.
   add(call.pending && !f.worryQ, `"${short(clean(lastThem))}": זו לא התנגדות על המוצר. יש דאגה מאחוריה. מה היא?`);
   add(call.pending && f.worryQ && !f.isolate, `שמעת את הדאגה. לפני שעונים: זה הדבר היחיד שעוצר את ${c.first}?`);
-  add(LINES[c.id].joint && call.pending && f.isolate && !f.joint, `${c.first} לא ${she('מחליטה', 'מחליט')} בלי ${c.partner}. איך ${c.partner} שומע את זה, בלי ש${c.first} ${she('תהיה המתווכת', 'יהיה המתווך')}?`);
+  add(linesOf(c).joint && call.pending && f.isolate && !f.joint, `${c.first} לא ${she('מחליטה', 'מחליט')} בלי ${c.partner}. איך ${c.partner} שומע את זה, בלי ש${c.first} ${she('תהיה המתווכת', 'יהיה המתווך')}?`);
   add(call.pending && f.worryQ && f.isolate,`עכשיו עונים בדיוק על הדאגה ש${c.first} ${said}, ובודקים: זה סוגר את זה?`);
   // What the client just said.
   const hook = lastThem && hookOf(c, lastThem);
@@ -731,7 +785,7 @@ export function feedbackFor(call) {
     '"ומה ישתנה לך כשזה יקרה?" ואחרי שעונה: "ומה צריך שיהיה הפעם, כדי שזה באמת יעבוד לך?" (שאלה אחת בכל פעם.)',
     '"אז אם אני מסכם: אתה היום ב-___, רוצה להגיע ל-___, ניסית ___, וזה נתקע ב-___. ומה שחייב להיות הפעם זה ___. הבנתי נכון?"',
     '"עוד שאלה לפני שנדבר על פתרון: מי עוד מחליט איתך, וכמה מתאים לך להשקיע בזה?"',
-    LINES[c.id].fitAlt, // the fit-check line this client needed to hear (prompt v2 3.6)
+    linesOf(c).fitAlt, // the fit-check line this client needed to hear (prompt v2 3.6)
     '"יש לי כמה מחשבות איך לסגור את זה, חלק מהן אפשר לעשות גם לבד. רוצה לשמוע?"',
     '"לפני שאני נותן מספרים, שלוש שאלות קצרות: זה פותר את ___? נוח לך לעבוד איתי? ואם המספר הגיוני, אתה בעמדה להחליט?"',
     '"חוץ מזה, יש עוד משהו שעוצר?" ואחרי הפירוק: "זה פותר לך את זה?"',
@@ -811,7 +865,7 @@ export function feedbackFor(call) {
       obstacle: !!f[c.obstacleKey],
       decider: c.partner ? !!f.decider : null,
       budget: !!f.budget,
-      condition: LINES[c.id].joint ? !!f.joint : fit.kind === 'fit' ? !!call.resolved : !!f.fitRight,
+      condition: linesOf(c).joint ? !!f.joint : fit.kind === 'fit' ? !!call.resolved : !!f.fitRight,
     },
     next: {
       stageN,
