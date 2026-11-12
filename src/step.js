@@ -2,7 +2,7 @@
 // before a call, and the finish. The call, the feedback and the tools are in call.js and
 // tools.js; the answer sheet is in sheet.js.
 import { html, useState, useEffect, Icon, cx, confetti, money, PencilLine } from './lib.js';
-import { Button, Note, StepHeading, SharkAvatar } from './components.js';
+import { Button, Note, StepHeading, SharkAvatar, PartnerNote } from './components.js';
 import { Sheet, Tag, Field, Chips, inputCls } from './ui.js';
 import { USER, CLIENTS, POOL_CLIENTS, CONTEXT, CLIENT_FILE, FORMS, LEVELS, GROUPS, STAGES, PARTS, g } from './data.js';
 
@@ -69,11 +69,7 @@ function OpeningArt() {
       <b class="block font-display text-[28px] leading-none text-brand-600">4.2</b><small class="text-[11px] text-muted">מתוך 5</small>
     </div>
 
-    <${Note} tone="white" tilt=${-3} class="absolute bottom-0 left-2 w-[205px] !p-3 text-[14px]">
-      <span class="fb-note-kicker">התיקון האחד</span>
-      <span>לסכם במילים שלה, לפני ההצגה.</span>
-    <//>
-    <span class="hand absolute bottom-3 right-3 rotate-[-3deg] text-[24px]">בלי לחץ, עם משוב</span>
+    <span class="hand absolute bottom-3 right-6 rotate-[-3deg] text-[26px] leading-tight">קודם כאן,<br />ואז מול הלקוח</span>
   </div>`;
 }
 
@@ -82,7 +78,7 @@ function OpeningArt() {
 // client from the client file, so the practice does not run out after three calls. Each card
 // shows the levels already practised with that client, to invite a harder round.
 // The tools sit quietly at the bottom.
-export function Room({ state, onPick, onAdd, onBuild, onMore, onResume, onTool, onContext, onSheet }) {
+export function Room({ state, onPick, onAdd, onBuild, onMore, onResume, onTool, onContext, onSheet, onScript }) {
   const [building, setBuilding] = useState(false);
   const [describe, setDescribe] = useState(false);
   const [buildingReal, setBuildingReal] = useState(null);
@@ -191,6 +187,11 @@ export function Room({ state, onPick, onAdd, onBuild, onMore, onResume, onTool, 
     ${describe && html`<${RealClientSheet} onClose=${() => setDescribe(false)} onSubmit=${submitReal} />`}
   </div>
   <aside class="mt-10 lg:sticky lg:top-6 lg:mt-0 lg:rounded-[20px] lg:bg-white/60 lg:p-4 lg:ring-1 lg:ring-line">
+    <button type="button" onClick=${onScript} class="mb-4 flex w-full items-center gap-3 rounded-2xl bg-brand-600 p-3.5 text-start text-white shadow-[0_8px_20px_rgba(31,63,148,.22)] transition hover:opacity-95 cursor-pointer">
+      <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15"><${Icon} name="scroll-text" size=${20} /></span>
+      <span class="min-w-0 flex-1"><b class="block text-[16px]">התסריט שלך</b><small class="block text-[13px] opacity-90">מה אומרים ומה עונים. לפתוח לפני כל שיחה</small></span>
+      <${Icon} name="chevron-left" size=${18} class="shrink-0" />
+    </button>
     <h2 class="mb-3 text-[15px] font-bold text-muted">עוד בחדר</h2>
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
       ${[
@@ -318,6 +319,8 @@ export function Brief({ client, level, setLevel, onPrep, last }) {
 }
 
 // ---------- the finish ----------
+// What the user leaves with: the script for the next call (the main thing, with the shark's
+// note on why it matters), the one thing to remember, and the sheet and the calls in one line.
 export function Done({ state, onScript }) {
   useEffect(() => {
     const t = setTimeout(() => confetti('step'), 200);
@@ -326,35 +329,48 @@ export function Done({ state, onScript }) {
   const done = state.calls.filter((c) => c.feedback);
   const best = done.reduce((a, b) => (!a || b.feedback.avg > a.feedback.avg ? b : a), null);
   const last = done[done.length - 1];
+  const fix = last?.feedback?.fix;
   const mine = state.sheet.filter((r) => r.mine).length;
-  const rows = [
-    ['messages-square', 'שיחות', `${done.length} ${done.length === 1 ? 'שיחה' : 'שיחות'}${best ? `, הכי טובה: ${best.feedback.avg.toFixed(1)} עם ${CLIENTS.find((c) => c.id === best.clientId).first}` : ''}`],
-    ['target', 'לזכור', last?.feedback?.fix ? last.feedback.fix.title.split(':')[0] : '—'],
-    ['file-text', 'דף התשובות', `${state.sheet.length} התנגדויות${mine ? `, ${mine} במילים שלך` : ''}. נשמר בקבצים › מגדילים מכירות`],
-    ['door-open', 'החדר', 'נשאר פתוח: אפשר לחזור לפני כל שיחה אמיתית'],
-  ];
-  return html`<div class="mx-auto grid max-w-[1000px] items-center gap-8 px-4 py-6 md:grid-cols-[1.2fr_0.8fr] md:px-8 md:py-10">
+  return html`<div class="mx-auto grid max-w-[1000px] items-start gap-8 px-4 py-6 md:grid-cols-[1.25fr_0.75fr] md:px-8 md:py-10">
     <div>
       <p class="fb-eyebrow mb-1">סיימת את שלב 12</p>
-      <h1 class="fb-h1 mb-4 text-[28px] md:text-[36px]">השיחה הבאה <span class="fb-marker">מוכנה</span></h1>
-      <section class="fb-panel !p-4 md:!p-5">
-        <ul class="flex flex-col divide-y divide-line">
-          ${rows.map(([icon, k, v]) => html`<li key=${k} class="flex items-start gap-3 py-2"><span class="mt-0.5 text-brand-600"><${Icon} name=${icon} size=${18} /></span><span class="w-[92px] shrink-0 text-[14px] font-bold">${k}</span><span class="min-w-0 text-[15px]">${v}</span></li>`)}
-        </ul>
-      </section>
-      <button type="button" onClick=${onScript} class="mt-4 flex w-full items-center gap-3 rounded-2xl bg-brand-600 p-4 text-start text-white transition hover:opacity-95 cursor-pointer">
-        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/15"><${Icon} name="scroll-text" size=${22} /></span>
-        <span class="min-w-0 flex-1"><b class="block text-[17px]">התסריט שלך לשיחת מכירה</b><span class="text-[14px] opacity-85">מבנה השיחה, ההתנגדויות הנפוצות והתשובות. עמוד אחד לפני כל שיחה.</span></span>
-        <${Icon} name="chevron-left" size=${20} class="shrink-0" />
+      <h1 class="fb-h1 mb-2 text-[28px] md:text-[36px]">השיחה הבאה <span class="fb-marker">מוכנה</span></h1>
+      <p class="mb-5 text-[17px] text-muted">יצאת מהשלב עם תסריט לשיחת מכירה, ודף תשובות להתנגדויות. שניהם נשמרו בקבצים › מגדילים מכירות.</p>
+
+      <button type="button" onClick=${onScript} class="group relative flex w-full items-center gap-4 overflow-hidden rounded-[22px] bg-gradient-to-l from-brand-600 to-[#1d3f94] p-5 text-start text-white shadow-[0_12px_30px_rgba(31,63,148,.28)] transition hover:-translate-y-0.5 cursor-pointer md:p-6">
+        <span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/15"><${Icon} name="scroll-text" size=${28} /></span>
+        <span class="min-w-0 flex-1">
+          <span class="mb-1 inline-block rounded-full bg-white/20 px-2.5 py-0.5 text-[12px] font-bold">התוצר העיקרי של השלב</span>
+          <b class="block font-display text-[22px] leading-tight md:text-[24px]">התסריט שלך לשיחת מכירה</b>
+          <span class="mt-1 block text-[15px] opacity-90">6 חלקים, כ-30 דקות, ${state.sheet.length} התנגדויות עם תשובה. כל שורה נערכת, והכריש עוזר.</span>
+        </span>
+        <span class="hidden shrink-0 items-center gap-1 rounded-xl bg-white px-4 py-2.5 text-[15px] font-bold text-brand-600 sm:inline-flex">לפתוח<${Icon} name="chevron-left" size=${18} /></span>
+        <${Icon} name="chevron-left" size=${22} class="shrink-0 sm:hidden" />
       </button>
+
+      <${PartnerNote} title="על התסריט" tilt=${-1} class="mt-4 !p-4">
+        זה הכלי הכי חשוב שיצא מהשלב. מי שנכנס לשיחה עם תסריט לא נתקע בהתנגדות, ומגיע לבקשה בסוף. חמש דקות עליו לפני כל שיחה, ואם משהו לא נשמע כמוך, נשפר אותו יחד.
+      <//>
+
+      ${fix && html`<section class="mt-5 rounded-2xl border-[1.5px] border-brand-200 bg-white p-4">
+        <p class="mb-1 flex items-center gap-1.5 text-[13px] font-bold text-brand-600"><${Icon} name="target" size=${15} />בשיחה הבאה, לזכור דבר אחד</p>
+        <b class="block text-[16px]">${fix.title.split(':')[0]}</b>
+        <p class="mt-1 text-[15px] text-muted">להגיד: ${fix.alt}</p>
+      </section>`}
+
+      <p class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[14px] text-muted">
+        <span class="inline-flex items-center gap-1"><${Icon} name="messages-square" size=${14} />${done.length} ${done.length === 1 ? 'שיחה' : 'שיחות'}${best ? `, הכי טובה: ${best.feedback.avg.toFixed(1)} עם ${CLIENTS.find((c) => c.id === best.clientId).first}` : ''}</span>
+        <span class="inline-flex items-center gap-1"><${Icon} name="file-text" size=${14} />דף התשובות: ${state.sheet.length} התנגדויות${mine ? `, ${mine} במילים שלך` : ''}</span>
+        <span class="inline-flex items-center gap-1"><${Icon} name="door-open" size=${14} />החדר נשאר פתוח לפני כל שיחה אמיתית</span>
+      </p>
     </div>
-    <div class="flex justify-center pt-8">
+    <div class="flex justify-center pt-4 md:pt-16">
       <${Note} tone="white" tilt=${-2} class="fb-badge-note !pt-10">
         <span class="fb-note-kicker">שלב הושלם</span>
         <b class="font-display text-[24px]">חדר התרגול</b>
-        <span class="text-[14px]">חסכת בשלב הזה</span>
+        <span class="text-[14px]">שווי השלב</span>
         <span class="relative font-display text-[36px] font-black text-money">${money(750)}<${PencilLine} color="#12805c" class="absolute inset-x-0 -bottom-1 h-2 w-full" /></span>
-        <span class="text-[12px] text-muted">כמו פגישת אימון מכירות אחת</span>
+        <span class="text-[12px] text-muted">מה שעולה פגישת אימון מכירות אחת</span>
       <//>
     </div>
   </div>`;

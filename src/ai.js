@@ -370,3 +370,37 @@ export async function suggestAnswer({ said, when, sheet, before }) {
   const content = `ההתנגדות: "${said}"${when ? `\nמתי זה עלה: ${when}` : ''}`;
   return ask({ system, messages: [{ role: 'user', content }], schema: ROW_SCHEMA, effort: 'medium', maxTokens: 6000 });
 }
+
+// ---------- "התסריט שלך": the shark helps rewrite one line ----------
+const LINE_SCHEMA = {
+  type: 'object',
+  properties: {
+    line: { type: 'string', description: 'השורה החדשה, מוכנה להגיד בשיחה' },
+    why: { type: 'string', description: 'משפט קצר: מה שונה ולמה זה עובד טוב יותר בשיחה' },
+  },
+  required: ['line', 'why'],
+  additionalProperties: false,
+};
+const MODE_ASK = {
+  short: 'קצר יותר: אותו רעיון בחצי מהמילים. שאלה נשארת שאלה.',
+  natural: 'יותר כמו שמדברים: עברית מדוברת וחמה, כמו שהמתאמן היה אומר בטלפון, לא כמו טקסט כתוב.',
+  soft: 'יותר רך: פחות לחץ ופחות "מכירה", בלי לוותר על השאלה או על הבקשה.',
+};
+
+// text: the line now. where: the part of the call or the objection it belongs to.
+// mode: short | natural | soft | custom (then ask is what the user wrote to the shark).
+export async function sharkLine({ text, where, mode, ask: wish }) {
+  const system = [
+    'מצב פעיל: עריכת שורה בתסריט שיחת המכירה של המתאמן. אתה הכריש, השותף העסקי שלו. אל תשחק לקוח ואל תציג את התפריט.',
+    trainee(),
+    [
+      'כתוב גרסה אחת חדשה לשורה, לפי הבקשה, ולפי סעיפים 3 ו-4 בפרומפט ובלוק ההקשר:',
+      '- נשאר באותו חלק של השיחה ובאותה מטרה. שאלה נשארת שאלה אחת.',
+      '- רק עובדות מהבלוק: מסלולים, מחירים, תשלומים, ערבות, בונוס. לא ממציאים לקוחות, תוצאות, הנחות או דחיפות.',
+      '- ___ הוא מקום למילים של הלקוח. משאירים אותו.',
+      '- פונים ללקוח בלשון זכר. בלי מקפים ארוכים.',
+    ].join('\n'),
+  ].join('\n\n');
+  const content = [`איפה בשיחה: ${where}`, `השורה עכשיו: "${text}"`, `הבקשה: ${mode === 'custom' ? wish : MODE_ASK[mode]}`].join('\n');
+  return ask({ system, messages: [{ role: 'user', content }], schema: LINE_SCHEMA, effort: 'low', maxTokens: 3000 });
+}

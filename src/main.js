@@ -26,7 +26,7 @@ const KEY = 'flowbiz-pr-state';
 const SCREENS = ['opening', 'room', 'brief', 'call', 'feedback', 'stage', 'drill', 'analysis', 'sheet', 'script', 'done'];
 const PART_OF = { room: 0, brief: 0, drill: 0, analysis: 0, call: 1, feedback: 2, stage: 2, sheet: 3, script: 3 };
 
-const freshState = () => ({ calls: [], added: [], real: [], sheet: SHEET.map((r) => ({ ...r })), script: { edits: {}, added: {} }, drill: { done: 0 }, done: false });
+const freshState = () => ({ calls: [], added: [], real: [], sheet: SHEET.map((r) => ({ ...r })), script: { edits: {}, added: {}, shark: {} }, drill: { done: 0 }, done: false });
 // The mockup always opens the step from zero: no calls, no "מהפעם הקודמת".
 // Progress lives only while the page is open (and across the phone/desktop switch).
 function loadState() {
@@ -64,6 +64,7 @@ const SHARK_LINE = {
   brief: g('תזכור: מי ששואל מוביל. המטרה היא החלטה ברורה, לא "אחשוב על זה".', 'תזכרי: מי ששואלת מובילה. המטרה היא החלטה ברורה, לא "אחשוב על זה".'),
   feedback: 'תיקון אחד. לא עשרה. את הזה כדאי לתרגל עד שהוא יוצא טבעי.',
   sheet: 'זה הדף שכדאי לפתוח חמש דקות לפני כל שיחה אמיתית.',
+  script: g('תסריט לא הופך אותך לרובוט. הוא משחרר לך את הראש להקשיב. ליד כל שורה אני כאן, אם תרצה לשפר אותה.', 'תסריט לא הופך אותך לרובוטית. הוא משחרר לך את הראש להקשיב. ליד כל שורה אני כאן, אם תרצי לשפר אותה.'),
 };
 
 function App({ view: shellView, onViewChange }) {
@@ -350,6 +351,7 @@ function App({ view: shellView, onViewChange }) {
       onTool=${(t) => go({ screen: t })}
       onContext=${() => setCtxOpen(true)}
       onSheet=${() => go({ screen: 'sheet' })}
+      onScript=${() => go({ screen: 'script' })}
     />`,
     brief: client && html`<${Brief} client=${client} level=${level} setLevel=${setLevel} onPrep=${() => setPrepFor(client.id)} last=${[...state.calls].reverse().find((c) => c.clientId === client.id && c.feedback)} />`,
     call: call && html`<${Call} key=${call.id} call=${call} busy=${busy} onSend=${send} onHint=${hint} onSample=${playSample} />`,

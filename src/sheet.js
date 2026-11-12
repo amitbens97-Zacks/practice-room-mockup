@@ -4,10 +4,10 @@
 // after every call the rows that came up are rewritten in the user's own words.
 // The user can add an objection they heard, and the system suggests the row for it.
 import { html, useState, Icon, cx, money } from './lib.js';
-import { Button, InlineEdit, Note } from './components.js';
+import { Button, InlineEdit, Note, PartnerNote, SharkAvatar } from './components.js';
 import { Sheet, Tag } from './ui.js';
-import { FORMS, CONTEXT, g, suggestLocal } from './data.js';
-import { hasAI, suggestAnswer } from './ai.js';
+import { FORMS, CONTEXT, g, suggestLocal, sharkLocal } from './data.js';
+import { hasAI, suggestAnswer, sharkLine } from './ai.js';
 
 const joinAnswer = (r) => `${r.ask} ${r.reply} ${r.close}`;
 
@@ -15,15 +15,25 @@ const joinAnswer = (r) => `${r.ask} ${r.reply} ${r.close}`;
 function Row({ r, setRow, onRemove, fresh, notify }) {
   const [open, setOpen] = useState(false);
   return html`<article id=${`row-${r.id}`} class=${cx('fb-panel !p-4', r.mine && 'ring-2 ring-brand-300', fresh && 'rise ring-2 ring-money')}>
-    <div class="mb-1.5 flex items-start justify-between gap-2">
-      <b class="font-display text-[18px] leading-snug">"${r.said}"</b>
+    <div class="mb-3 flex items-start justify-between gap-2">
+      <span class="min-w-0"><span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-muted"><${Icon} name="message-circle" size=${12} />הלקוח אומר</span><b class="font-display text-[19px] leading-snug">"${r.said}"</b></span>
       <span class="flex shrink-0 items-center gap-1">
         ${r.mine && html`<${Tag} tone="blue"><${Icon} name="pencil" size=${12} />במילים שלך<//>`}
         ${r.added && html`<${Tag} tone="live"><${Icon} name="plus" size=${12} />הוספת<//>`}
         ${r.added && html`<button type="button" aria-label="הסרה מהדף" class="rounded p-1 text-faint hover:bg-error-50 hover:text-error cursor-pointer" onClick=${() => onRemove(r.id)}><${Icon} name="x" size=${15} /></button>`}
       </span>
     </div>
-    <div class="text-[16px] leading-relaxed"><${InlineEdit} multiline value=${r.answer} onSave=${(v) => setRow(r.id, { answer: v, edited: true })} /></div>
+    <p class="mb-1.5 flex items-center gap-1 text-[12px] font-bold text-brand-600"><${Icon} name="corner-down-left" size=${12} />מה עונים</p>
+    ${r.mine && html`<div class="mb-2.5 rounded-xl bg-brand-50 px-3 py-2 ring-1 ring-brand-200">
+      <span class="mb-0.5 block text-[12px] font-bold text-brand-600">${r.src?.split(' · ')[0] || 'מהשיחה'} · במילים שלך</span>
+      <div class="text-[16px] leading-relaxed"><${InlineEdit} multiline value=${r.answer} onSave=${(v) => setRow(r.id, { answer: v, edited: true })} /></div>
+    </div>`}
+    <ol class="flex flex-col gap-2">
+      ${SUGGEST_STEPS.map(([k, label], n) => html`<li key=${k} class="flex items-start gap-2.5">
+        <span class="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-600">${n + 1}</span>
+        <span class="min-w-0 flex-1 text-[16px] leading-relaxed"><b class="block text-[13px] text-brand-600">${label}</b><${InlineEdit} multiline value=${r[k]} onSave=${(v) => setRow(r.id, { [k]: v, edited: true, ...(r.mine ? {} : { answer: joinAnswer({ ...r, [k]: v }) }) })} /></span>
+      </li>`)}
+    </ol>
     <button type="button" aria-expanded=${open} class="mt-2 inline-flex items-center gap-1 text-[13px] font-bold text-muted hover:text-ink cursor-pointer" onClick=${() => setOpen(!open)}><${Icon} name=${open ? 'chevron-up' : 'chevron-down'} size=${14} />הדאגה שמאחור וגרסה לוואטסאפ</button>
     ${open && html`<div class="rise mt-2 flex flex-col gap-2">
       <p class="text-[14px] text-muted"><b>הדאגה:</b> ${r.worry} · <span class="text-faint">${r.src}</span></p>
@@ -156,14 +166,20 @@ export function AnswerSheet({ sheet, setRow, addRow, removeRow, notify, onScript
     <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
       <div>
                 <h1 class="fb-h1 text-[26px] md:text-[32px]">דף <span class="fb-marker">תשובות להתנגדויות</span></h1>
-        <p class="mt-1 text-[16px] text-muted">התוצר של השלב. מה שעלה בשיחה נכתב מחדש במילים שלך.</p>
+        <p class="mt-1 max-w-[52ch] text-[16px] text-muted">כשלקוח אומר אחד מהמשפטים האלה, זה מה שעונים. לפתוח 5 דקות לפני כל שיחה. מה שעלה בתרגול נכתב מחדש במילים שלך.</p>
       </div>
       <div class="flex flex-wrap gap-2">
         ${!adding && html`<${Button} variant="mini" onClick=${() => setAdding(true)}><${Icon} name="plus" size=${15} />התנגדות חדשה<//>`}
-        <${Button} variant="mini" onClick=${onScript}><${Icon} name="scroll-text" size=${15} />התסריט שלך<//>
+        <${Button} variant="mini" class="!bg-money !border-money" onClick=${onScript}><${Icon} name="scroll-text" size=${15} />התסריט שלך<//>
         <${Button} variant="mini" onClick=${() => notify('ה-PDF ירד, ונשמר בקבצים › מגדילים מכירות', 'download')}><${Icon} name="download" size=${15} />הורדה<//>
       </div>
     </div>
+    <ol class="mb-4 grid gap-2 sm:grid-cols-3" aria-label="איך עונים על התנגדות">
+      ${SUGGEST_STEPS.map(([k, label, why], n) => html`<li key=${k} class="flex items-center gap-2 rounded-xl bg-white/70 px-3 py-2 ring-1 ring-line">
+        <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-600 text-[12px] font-bold text-white">${n + 1}</span>
+        <span class="text-[14px] leading-tight"><b class="block">${label}</b><span class="text-muted">${why}</span></span>
+      </li>`)}
+    </ol>
     ${adding && html`<${NewObjection} sheet=${sheet} onAdd=${onAdd} onClose=${() => setAdding(false)} />`}
     <div class="mb-5 flex flex-wrap gap-1.5" role="radiogroup" aria-label="סינון לפי סוג">
       ${[{ id: 'all', label: `הכל (${sheet.length})` }, ...FORMS.map((f) => ({ id: f.id, label: `${f.label} (${sheet.filter((r) => r.form === f.id).length})`, icon: f.icon }))].map(
@@ -306,13 +322,79 @@ const STEPS = [
   ['close', 'סוגרים', 'לולאה, ורק אז מבקשים שוב'],
 ];
 
+// The shark's help with one line of the script: shorter, more like the user talks, softer,
+// or whatever the user asks. With a key Claude rewrites the line (ai.sharkLine); without
+// one the mockup uses the shark's ready rewrites of the untouched lines, and "shorter".
+const SHARK_MODES = [
+  ['short', 'קצר יותר', 'scissors'],
+  ['natural', g('כמו שאני מדבר', 'כמו שאני מדברת'), 'message-circle'],
+  ['soft', 'יותר רך', 'feather'],
+];
+
+function SharkHelp({ id, text, where, isDefault, onApply, onClose }) {
+  const ai = hasAI();
+  const [busy, setBusy] = useState(null);
+  const [res, setRes] = useState(null);
+  const [wish, setWish] = useState('');
+  const [msg, setMsg] = useState('');
+  const run = async (mode) => {
+    if (busy || (mode === 'custom' && !wish.trim())) return;
+    setBusy(mode);
+    setMsg('');
+    let out = null;
+    if (ai) {
+      try {
+        out = await sharkLine({ text, where, mode, ask: wish.trim() });
+      } catch (e) {
+        out = mode === 'custom' ? null : sharkLocal({ key: id, text, isDefault, mode });
+        if (!out) setMsg('הכריש לא ענה הפעם. אפשר לנסות שוב.');
+      }
+    } else {
+      await new Promise((r) => setTimeout(r, 450));
+      out = mode === 'custom' ? null : sharkLocal({ key: id, text, isDefault, mode });
+      if (!out) setMsg(mode === 'short' ? 'השורה כבר קצרה. אפשר לבקש משהו אחר.' : 'במוק-אפ בלי מפתח הכריש מציע כאן רק "קצר יותר". עם מפתח (Shift+D) הוא כותב כל בקשה, לכל שורה.');
+    }
+    setRes(out ? { ...out, mode } : null);
+    setBusy(null);
+  };
+  const chip = 'inline-flex h-8 items-center gap-1 rounded-lg border-[1.5px] px-2.5 text-[13px] font-bold cursor-pointer disabled:opacity-50';
+  return html`<div class="rise mt-2 rounded-2xl border-[1.5px] border-brand-200 bg-white p-3 shadow-[0_6px_18px_rgba(30,40,90,.08)]" role="group" aria-label="הכריש עוזר לערוך">
+    <div class="mb-2 flex items-center gap-2">
+      <${SharkAvatar} size=${28} mood="thinking" />
+      <b class="text-[14px]">הכריש · לשפר את השורה</b>
+      <button type="button" aria-label="סגירה" class="ms-auto rounded-lg p-1 text-muted hover:bg-canvas hover:text-ink cursor-pointer" onClick=${onClose}><${Icon} name="x" size=${16} /></button>
+    </div>
+    <div class="flex flex-wrap gap-1.5">
+      ${SHARK_MODES.map(([m, label, icon]) => html`<button key=${m} type="button" disabled=${!!busy} onClick=${() => run(m)} class=${cx(chip, res?.mode === m ? 'border-brand-600 bg-brand-100 text-brand-600' : 'border-line bg-white text-ink hover:border-brand-300')}><${Icon} name=${icon} size=${13} />${label}</button>`)}
+    </div>
+    <form class="mt-2 flex gap-1.5" onSubmit=${(e) => (e.preventDefault(), run('custom'))}>
+      <input class="h-9 min-w-0 flex-1 rounded-lg border-[1.5px] border-line bg-white px-2.5 text-[14px] outline-none focus:border-brand-600 disabled:bg-canvas" value=${wish} disabled=${!ai} onInput=${(e) => setWish(e.target.value)} placeholder=${ai ? 'או לכתוב לכריש מה לשנות, למשל: "יותר ישיר"' : 'בקשה חופשית לכריש: עם מפתח (Shift+D)'} />
+      <button type="submit" aria-label="לשלוח לכריש" disabled=${!ai || !wish.trim() || !!busy} class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-600 text-white disabled:opacity-40 cursor-pointer"><${Icon} name="send" size=${15} /></button>
+    </form>
+    ${busy && html`<p class="mt-2.5 flex items-center gap-2 text-[14px] text-muted"><span class="fb-spin" style=${{ width: 14, height: 14, borderColor: '#2f5fc4', borderTopColor: 'transparent' }}></span>הכריש כותב...</p>`}
+    ${msg && !busy && html`<p class="mt-2 text-[13px] text-warn">${msg}</p>`}
+    ${res && !busy && html`<div class="rise mt-3 rounded-xl bg-brand-50 p-3">
+      <p class="text-[15px] font-semibold leading-relaxed">${res.line}</p>
+      <p class="mt-1 text-[13px] text-muted">${res.why}</p>
+      <div class="mt-2.5 flex flex-wrap items-center gap-2">
+        <${Button} variant="mini" onClick=${() => onApply(res.line)}><${Icon} name="check" size=${15} />להכניס לתסריט<//>
+        ${ai && html`<${Button} variant="quiet" onClick=${() => run(res.mode)}><${Icon} name="refresh-cw" size=${14} />עוד ניסיון<//>`}
+      </div>
+    </div>`}
+  </div>`;
+}
+
+const SharkBtn = ({ on, onClick }) => html`<button type="button" aria-label="לשפר עם הכריש" title="לשפר עם הכריש" aria-expanded=${on} onClick=${onClick} class=${cx('mt-0.5 shrink-0 rounded-full transition cursor-pointer', on ? 'ring-2 ring-brand-600' : 'opacity-75 hover:opacity-100 hover:ring-2 hover:ring-brand-200')}><${SharkAvatar} size=${26} /></button>`;
+
 export function CallScript({ state, setScript, notify, onSheet }) {
   const { parts, objections, fixes } = scriptOf(state);
   const edits = state.script?.edits || {};
   const added = state.script?.added || {};
+  const sharked = state.script?.shark || {};
+  const [sharkAt, setSharkAt] = useState(null);
   const dirty = Object.keys(edits).length > 0 || Object.values(added).some((a) => a.length);
   const clean = (t) => (t || '').replace(/^"|"$/g, '');
-  const save = (key, v) => setScript({ edits: { ...edits, [key]: v.trim() } });
+  const save = (key, v, byShark) => setScript({ edits: { ...edits, [key]: v.trim() }, shark: { ...sharked, [key]: !!byShark } });
   const setAdded = (i, list) => setScript({ added: { ...added, [i]: list } });
   const lineOf = (i, j, mine, def) => edits[`p${i}.l${j}`] ?? clean(mine || def);
   const stepOf = (r, k) => edits[`o.${r.id}.${k}`] ?? r[k] ?? '';
@@ -330,20 +412,28 @@ export function CallScript({ state, setScript, notify, onSheet }) {
     notify('התסריט הועתק', 'copy');
   };
   const total = parts.reduce((s, p) => s + p.min, 0);
-  const editedTag = html`<span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-[#8a5a12]"><${Icon} name="pen-line" size=${11} />נערך</span>`;
+  const editedTag = (key) => html`<span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-[#8a5a12]"><${Icon} name=${sharked[key] ? 'sparkles' : 'pen-line'} size=${11} />${sharked[key] ? 'נערך עם הכריש' : 'נערך'}</span>`;
+  const toggleShark = (key) => setSharkAt(sharkAt === key ? null : key);
+  const help = (key, value, where, isDefault, apply) =>
+    sharkAt === key && html`<${SharkHelp} id=${key} text=${value} where=${where} isDefault=${isDefault} onClose=${() => setSharkAt(null)} onApply=${(v) => (apply(v), setSharkAt(null), notify('הכריש הכניס את השורה', 'sparkles'))} />`;
   return html`<div class="mx-auto max-w-[860px] px-4 py-6 md:px-8 md:py-8">
-    <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 class="fb-h1 text-[26px] md:text-[32px]">התסריט <span class="fb-marker">שלך</span></h1>
-        <p class="mt-1 text-[16px] text-muted">עמוד אחד לפתוח לפני כל שיחת מכירה. נבנה מהתרגול ומדף התשובות.</p>
-        <p class="mt-1 flex items-center gap-1.5 text-[14px] text-brand-600"><${Icon} name="pencil" size=${14} />כל שורה נערכת: ${g('לוחץ', 'לוחצת')} ${g('ומשנה', 'ומשנה')}, ואפשר להוסיף שורות לכל חלק.</p>
+        <p class="fb-eyebrow mb-1">לפתוח 5 דקות לפני כל שיחת מכירה</p>
+        <h1 class="fb-h1 text-[28px] md:text-[36px]">התסריט <span class="fb-marker">שלך</span></h1>
+        <p class="mt-1 text-[16px] text-muted">מבנה השיחה, מה שואלים ומה עונים, בעמוד אחד. נבנה מהתרגול ומדף התשובות, וכל שורה בו שלך לערוך.</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        ${dirty && html`<${Button} variant="mini" onClick=${() => (setScript({ edits: {}, added: {} }), notify('התסריט חזר לגרסה המקורית', 'rotate-ccw'))}><${Icon} name="rotate-ccw" size=${15} />לגרסה המקורית<//>`}
+        ${dirty && html`<${Button} variant="mini" onClick=${() => (setScript({ edits: {}, added: {}, shark: {} }), notify('התסריט חזר לגרסה המקורית', 'rotate-ccw'))}><${Icon} name="rotate-ccw" size=${15} />לגרסה המקורית<//>`}
         <${Button} variant="mini" onClick=${copy}><${Icon} name="copy" size=${15} />העתקה<//>
         <${Button} variant="mini" onClick=${() => notify('ה-PDF ירד, ונשמר בקבצים › מגדילים מכירות', 'download')}><${Icon} name="download" size=${15} />הורדה<//>
       </div>
     </div>
+
+    <${PartnerNote} title="למה תסריט" tilt=${-0.6} class="mb-7 !p-4 md:!p-5">
+      <p class="mb-2">מוכרים טובים לא מאלתרים. כשהשאלות והתשובות כבר כתובות, הראש פנוי להקשיב ללקוח, ולא לחשוב מה להגיד עכשיו. חמש דקות על העמוד הזה לפני שיחה, ושום התנגדות לא מפתיעה.</p>
+      <p class="flex items-start gap-1.5 text-[15px] text-brand-600"><${Icon} name="sparkles" size=${16} class="mt-1 shrink-0" /><span>שורה שלא נשמעת כמוך? ${g('לחץ', 'לחצי')} עליי ליד השורה, ונכתוב אותה יחד: קצר יותר, טבעי יותר או רך יותר. ${g('ואם אתה רוצה', 'ואם את רוצה')} לכתוב לבד, לוחצים על השורה עצמה.</span></p>
+    <//>
 
     <h2 class="mb-3 flex items-center gap-2 text-[16px] font-bold"><${Icon} name="route" size=${18} class="text-brand-600" />מבנה השיחה<span class="text-[13px] font-bold text-muted">· כ-${total} דקות</span></h2>
     <ol class="mb-8 flex flex-col gap-3">
@@ -357,16 +447,31 @@ export function CallScript({ state, setScript, notify, onSheet }) {
               ${p.lines.map(([mine, def, ex], j) => {
                 const key = `p${i}.l${j}`;
                 const edited = edits[key] != null;
-                return html`<li key=${j} class=${cx('rounded-xl px-3 py-2 text-[15px] leading-relaxed', edited ? 'bg-[#fdf8ea] ring-1 ring-[#e6cd8e]' : mine ? 'bg-brand-50 ring-1 ring-brand-200' : 'bg-canvas')}>
-                  ${edited ? editedTag : mine && html`<span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-brand-600"><${Icon} name="pencil" size=${11} />מהתרגול שלך</span>`}
-                  <${InlineEdit} multiline value=${lineOf(i, j, mine, def)} onSave=${(v) => save(key, v)} />
-                  ${ex && !edited && html`<span class="mt-1.5 block border-t border-line pt-1.5 text-[13px] text-muted"><b class="text-brand-600">איך זה נשמע אצלך בתרגול:</b> "${clean(ex)}"</span>`}
+                const value = lineOf(i, j, mine, def);
+                return html`<li key=${j}>
+                  <div class=${cx('flex items-start gap-2 rounded-xl px-3 py-2 text-[15px] leading-relaxed', edited ? 'bg-[#fdf8ea] ring-1 ring-[#e6cd8e]' : mine ? 'bg-brand-50 ring-1 ring-brand-200' : 'bg-canvas')}>
+                    <span class="min-w-0 flex-1">
+                      ${edited ? editedTag(key) : mine && html`<span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-brand-600"><${Icon} name="pencil" size=${11} />מהתרגול שלך</span>`}
+                      <${InlineEdit} multiline value=${value} onSave=${(v) => save(key, v)} />
+                      ${ex && !edited && html`<span class="mt-1.5 block border-t border-line pt-1.5 text-[13px] text-muted"><b class="text-brand-600">איך זה נשמע אצלך בתרגול:</b> "${clean(ex)}"</span>`}
+                    </span>
+                    <${SharkBtn} on=${sharkAt === key} onClick=${() => toggleShark(key)} />
+                  </div>
+                  ${help(key, value, p.title, !edited && !mine, (v) => save(key, v, true))}
                 </li>`;
               })}
-              ${(added[i] || []).map((l, k) => html`<li key=${`a${k}`} class="flex items-start gap-1 rounded-xl bg-[#fdf8ea] px-3 py-2 text-[15px] leading-relaxed ring-1 ring-[#e6cd8e]">
-                <span class="min-w-0 flex-1">${editedTag}<${InlineEdit} multiline value=${l} placeholder="שורה חדשה: ללחוץ ולכתוב" onSave=${(v) => setAdded(i, (added[i] || []).map((x, n) => (n === k ? v : x)).filter((x, n) => n !== k || x.trim()))} /></span>
-                <button type="button" aria-label="מחיקת השורה" class="rounded p-1 text-muted hover:text-ink cursor-pointer" onClick=${() => setAdded(i, (added[i] || []).filter((x, n) => n !== k))}><${Icon} name="x" size=${15} /></button>
-              </li>`)}
+              ${(added[i] || []).map((l, k) => {
+                const key = `a${i}.${k}`;
+                const put = (v) => setAdded(i, (added[i] || []).map((x, n) => (n === k ? v : x)).filter((x, n) => n !== k || x.trim()));
+                return html`<li key=${key}>
+                  <div class="flex items-start gap-1 rounded-xl bg-[#fdf8ea] px-3 py-2 text-[15px] leading-relaxed ring-1 ring-[#e6cd8e]">
+                    <span class="min-w-0 flex-1"><span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-[#8a5a12]"><${Icon} name="plus" size=${11} />הוספת</span><${InlineEdit} multiline value=${l} placeholder="שורה חדשה: ללחוץ ולכתוב" onSave=${put} /></span>
+                    ${l.trim() && html`<${SharkBtn} on=${sharkAt === key} onClick=${() => toggleShark(key)} />`}
+                    <button type="button" aria-label="מחיקת השורה" class="rounded p-1 text-muted hover:text-ink cursor-pointer" onClick=${() => setAdded(i, (added[i] || []).filter((x, n) => n !== k))}><${Icon} name="x" size=${15} /></button>
+                  </div>
+                  ${help(key, l, p.title, false, put)}
+                </li>`;
+              })}
             </ul>
             <button type="button" class="mt-2 inline-flex items-center gap-1 text-[13px] font-bold text-brand-600 hover:underline cursor-pointer" onClick=${() => setAdded(i, [...(added[i] || []), ''])}><${Icon} name="plus" size=${14} />להוסיף שורה</button>
           </div>
@@ -385,10 +490,16 @@ export function CallScript({ state, setScript, notify, onSheet }) {
           <p class="mb-3 text-[13px] text-muted">מה באמת מדאיג: ${r.worry}</p>
           <ol class="flex flex-col gap-2">
             ${STEPS.map(([k, label, sub], n) => {
-              const edited = edits[`o.${r.id}.${k}`] != null;
-              return html`<li key=${k} class="flex items-start gap-2">
-                <span class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-600">${n + 1}</span>
-                <span class="min-w-0 flex-1 text-[15px] leading-relaxed"><b class="text-[13px] text-brand-600">${label}</b> <small class="text-[12px] text-faint">${sub}</small>${edited && html` <small class="text-[12px] font-bold text-[#8a5a12]">· נערך</small>`}<br /><${InlineEdit} multiline value=${stepOf(r, k)} onSave=${(v) => save(`o.${r.id}.${k}`, v)} /></span>
+              const key = `o.${r.id}.${k}`;
+              const edited = edits[key] != null;
+              const value = stepOf(r, k);
+              return html`<li key=${k}>
+                <div class="flex items-start gap-2">
+                  <span class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-600">${n + 1}</span>
+                  <span class="min-w-0 flex-1 text-[15px] leading-relaxed"><b class="text-[13px] text-brand-600">${label}</b> <small class="text-[12px] text-faint">${sub}</small>${edited && html` <small class="text-[12px] font-bold text-[#8a5a12]">· ${sharked[key] ? 'נערך עם הכריש' : 'נערך'}</small>`}<br /><${InlineEdit} multiline value=${value} onSave=${(v) => save(key, v)} /></span>
+                  <${SharkBtn} on=${sharkAt === key} onClick=${() => toggleShark(key)} />
+                </div>
+                ${help(key, value, `התנגדות "${r.said}", צעד: ${label} (${sub})`, false, (v) => save(key, v, true))}
               </li>`;
             })}
           </ol>
