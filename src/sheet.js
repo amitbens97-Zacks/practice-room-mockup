@@ -431,8 +431,9 @@ export function CallScript({ state, setScript, notify, onSheet }) {
     </div>
 
     <${PartnerNote} title="למה תסריט" tilt=${-0.6} class="mb-7 !p-4 md:!p-5">
-      <p class="mb-2">מוכרים טובים לא מאלתרים. כשהשאלות והתשובות כבר כתובות, הראש פנוי להקשיב ללקוח, ולא לחשוב מה להגיד עכשיו. חמש דקות על העמוד הזה לפני שיחה, ושום התנגדות לא מפתיעה.</p>
-      <p class="flex items-start gap-1.5 text-[15px] text-brand-600"><${Icon} name="sparkles" size=${16} class="mt-1 shrink-0" /><span>שורה שלא נשמעת כמוך? ${g('לחץ', 'לחצי')} עליי ליד השורה, ונכתוב אותה יחד: קצר יותר, טבעי יותר או רך יותר. ${g('ואם אתה רוצה', 'ואם את רוצה')} לכתוב לבד, לוחצים על השורה עצמה.</span></p>
+      <p class="mb-2">כשהשאלות והתשובות כבר כתובות, הראש פנוי להקשיב ללקוח, ושום התנגדות לא מפתיעה. חמש דקות על העמוד הזה לפני שיחה.</p>
+      <p class="mb-2 flex items-start gap-1.5"><${Icon} name="monitor-smartphone" size=${17} class="mt-1 shrink-0 text-brand-600" /><span>שיחה בזום או בטלפון? ${g('תשאיר', 'תשאירי')} את התסריט פתוח מול העיניים. הלקוח לא רואה אותו, ${g('ואתה', 'ואת')} לא ${g('מפספס', 'מפספסת')} אף שלב.</span></p>
+      <p class="flex items-start gap-1.5 text-[15px] text-brand-600"><${Icon} name="sparkles" size=${16} class="mt-1 shrink-0" /><span>שורה לא נשמעת כמוך? ${g('לחץ', 'לחצי')} עליי לידה ונשפר יחד, או על השורה עצמה כדי לכתוב לבד.</span></p>
     <//>
 
     <h2 class="mb-3 flex items-center gap-2 text-[16px] font-bold"><${Icon} name="route" size=${18} class="text-brand-600" />מבנה השיחה<span class="text-[13px] font-bold text-muted">· כ-${total} דקות</span></h2>
