@@ -11,37 +11,44 @@ import { hasAI, suggestAnswer, sharkLine } from './ai.js';
 
 const joinAnswer = (r) => `${r.ask} ${r.reply} ${r.close}`;
 
-// One objection: what they said and the answer. The worry and the WhatsApp version open on demand.
+// One objection, clean by default: what the client says and the answer in short (the
+// user's own words when it came up in practice). "התשובה המלאה" opens the three steps, each
+// editable, with what to do when it's real and the worry behind it.
 function Row({ r, setRow, onRemove, fresh, notify }) {
   const [open, setOpen] = useState(false);
+  const copy = () => {
+    try {
+      navigator.clipboard?.writeText(r.short);
+    } catch (e) {}
+    notify('הועתק לוואטסאפ', 'copy');
+  };
   return html`<article id=${`row-${r.id}`} class=${cx('fb-panel !p-4', r.mine && 'ring-2 ring-brand-300', fresh && 'rise ring-2 ring-money')}>
-    <div class="mb-3 flex items-start justify-between gap-2">
-      <span class="min-w-0"><span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-muted"><${Icon} name="message-circle" size=${12} />הלקוח אומר</span><b class="font-display text-[19px] leading-snug">"${r.said}"</b></span>
+    <div class="mb-1.5 flex items-start justify-between gap-2">
+      <b class="min-w-0 font-display text-[19px] leading-snug">"${r.said}"</b>
       <span class="flex shrink-0 items-center gap-1">
         ${r.mine && html`<${Tag} tone="blue"><${Icon} name="pencil" size=${12} />במילים שלך<//>`}
         ${r.added && html`<${Tag} tone="live"><${Icon} name="plus" size=${12} />הוספת<//>`}
         ${r.added && html`<button type="button" aria-label="הסרה מהדף" class="rounded p-1 text-faint hover:bg-error-50 hover:text-error cursor-pointer" onClick=${() => onRemove(r.id)}><${Icon} name="x" size=${15} /></button>`}
       </span>
     </div>
-    <p class="mb-1.5 flex items-center gap-1 text-[12px] font-bold text-brand-600"><${Icon} name="corner-down-left" size=${12} />מה עונים</p>
-    ${r.mine && html`<div class="mb-2.5 rounded-xl bg-brand-50 px-3 py-2 ring-1 ring-brand-200">
-      <span class="mb-0.5 block text-[12px] font-bold text-brand-600">${r.src?.split(' · ')[0] || 'מהשיחה'} · במילים שלך</span>
-      <div class="text-[16px] leading-relaxed"><${InlineEdit} multiline value=${r.answer} onSave=${(v) => setRow(r.id, { answer: v, edited: true })} /></div>
-    </div>`}
-    <ol class="flex flex-col gap-2">
-      ${SUGGEST_STEPS.map(([k, label], n) => html`<li key=${k} class="flex items-start gap-2.5">
-        <span class="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-600">${n + 1}</span>
-        <span class="min-w-0 flex-1 text-[16px] leading-relaxed"><b class="block text-[13px] text-brand-600">${label}</b><${InlineEdit} multiline value=${r[k]} onSave=${(v) => setRow(r.id, { [k]: v, edited: true, ...(r.mine ? {} : { answer: joinAnswer({ ...r, [k]: v }) }) })} /></span>
-      </li>`)}
-    </ol>
-    <button type="button" aria-expanded=${open} class="mt-2 inline-flex items-center gap-1 text-[13px] font-bold text-muted hover:text-ink cursor-pointer" onClick=${() => setOpen(!open)}><${Icon} name=${open ? 'chevron-up' : 'chevron-down'} size=${14} />הדאגה שמאחור וגרסה לוואטסאפ</button>
-    ${open && html`<div class="rise mt-2 flex flex-col gap-2">
-      <p class="text-[14px] text-muted"><b>הדאגה:</b> ${r.worry} · <span class="text-faint">${r.src}</span></p>
-      <div class="flex items-start gap-2 rounded-xl bg-[#e7f6e9] px-3 py-2 text-[14px]">
-        <span class="mt-0.5 text-[#128c4a]"><${Icon} name="message-circle" size=${15} /></span>
-        <span class="min-w-0 flex-1">${r.short}</span>
-        <button type="button" aria-label="העתקה" class="rounded p-1 text-muted hover:text-ink cursor-pointer" onClick=${() => notify('הועתק לוואטסאפ', 'copy')}><${Icon} name="copy" size=${15} /></button>
-      </div>
+    <p class="flex items-start gap-1.5 text-[16px] leading-relaxed"><${Icon} name="corner-down-left" size=${15} class="mt-1.5 shrink-0 text-brand-600" /><span class=${cx('min-w-0', r.mine && !open && 'line-clamp-2')}>${r.mine ? r.answer : r.short}</span></p>
+    <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+      <button type="button" aria-expanded=${open} class="inline-flex items-center gap-1 text-[14px] font-bold text-brand-600 cursor-pointer" onClick=${() => setOpen(!open)}><${Icon} name=${open ? 'chevron-up' : 'chevron-down'} size=${15} />${open ? 'לסגור' : 'התשובה המלאה'}</button>
+      <button type="button" class="inline-flex items-center gap-1 text-[14px] font-bold text-muted hover:text-ink cursor-pointer" onClick=${copy}><${Icon} name="message-circle" size=${14} />להעתיק לוואטסאפ</button>
+    </div>
+    ${open && html`<div class="rise mt-3 border-t border-line pt-3">
+      ${r.mine && html`<div class="mb-3 rounded-xl bg-brand-50 px-3 py-2 ring-1 ring-brand-200">
+        <span class="mb-0.5 block text-[12px] font-bold text-brand-600">${r.src?.split(' · ')[0] || 'מהשיחה'} · במילים שלך</span>
+        <div class="text-[15px] leading-relaxed"><${InlineEdit} multiline value=${r.answer} onSave=${(v) => setRow(r.id, { answer: v, edited: true })} /></div>
+      </div>`}
+      <ol class="flex flex-col gap-2">
+        ${SUGGEST_STEPS.map(([k, label], n) => html`<li key=${k} class="flex items-start gap-2.5">
+          <span class="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-600">${n + 1}</span>
+          <span class="min-w-0 flex-1 text-[15px] leading-relaxed"><b class="block text-[13px] text-brand-600">${label}</b><${InlineEdit} multiline value=${r[k]} onSave=${(v) => setRow(r.id, { [k]: v, edited: true, ...(r.mine ? {} : { answer: joinAnswer({ ...r, [k]: v }) }) })} /></span>
+        </li>`)}
+      </ol>
+      ${r.honest && html`<p class="mt-3 flex items-start gap-1.5 rounded-xl bg-warn-50 px-3 py-2 text-[14px]"><${Icon} name="scale" size=${14} class="mt-0.5 shrink-0 text-warn" /><span><b>כשזה אמיתי:</b> ${r.honest}</span></p>`}
+      <p class="mt-2 text-[13px] text-muted">מה מדאיג אותו: ${r.worry} · <span class="text-faint">${r.src}</span></p>
     </div>`}
   </article>`;
 }
@@ -166,7 +173,7 @@ export function AnswerSheet({ sheet, setRow, addRow, removeRow, notify, onScript
     <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
       <div>
                 <h1 class="fb-h1 text-[26px] md:text-[32px]">דף <span class="fb-marker">תשובות להתנגדויות</span></h1>
-        <p class="mt-1 max-w-[52ch] text-[16px] text-muted">כשלקוח אומר אחד מהמשפטים האלה, זה מה שעונים. לפתוח 5 דקות לפני כל שיחה. מה שעלה בתרגול נכתב מחדש במילים שלך.</p>
+        <p class="mt-1 text-[16px] text-muted">כשלקוח אומר את זה, זה מה שעונים. לפתוח 5 דקות לפני כל שיחה.</p>
       </div>
       <div class="flex flex-wrap gap-2">
         ${!adding && html`<${Button} variant="mini" onClick=${() => setAdding(true)}><${Icon} name="plus" size=${15} />התנגדות חדשה<//>`}
@@ -174,12 +181,6 @@ export function AnswerSheet({ sheet, setRow, addRow, removeRow, notify, onScript
         <${Button} variant="mini" onClick=${() => notify('ה-PDF ירד, ונשמר בקבצים › מגדילים מכירות', 'download')}><${Icon} name="download" size=${15} />הורדה<//>
       </div>
     </div>
-    <ol class="mb-4 grid gap-2 sm:grid-cols-3" aria-label="איך עונים על התנגדות">
-      ${SUGGEST_STEPS.map(([k, label, why], n) => html`<li key=${k} class="flex items-center gap-2 rounded-xl bg-white/70 px-3 py-2 ring-1 ring-line">
-        <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-600 text-[12px] font-bold text-white">${n + 1}</span>
-        <span class="text-[14px] leading-tight"><b class="block">${label}</b><span class="text-muted">${why}</span></span>
-      </li>`)}
-    </ol>
     ${adding && html`<${NewObjection} sheet=${sheet} onAdd=${onAdd} onClose=${() => setAdding(false)} />`}
     <div class="mb-5 flex flex-wrap gap-1.5" role="radiogroup" aria-label="סינון לפי סוג">
       ${[{ id: 'all', label: `הכל (${sheet.length})` }, ...FORMS.map((f) => ({ id: f.id, label: `${f.label} (${sheet.filter((r) => r.form === f.id).length})`, icon: f.icon }))].map(
@@ -392,6 +393,9 @@ export function CallScript({ state, setScript, notify, onSheet }) {
   const added = state.script?.added || {};
   const sharked = state.script?.shark || {};
   const [sharkAt, setSharkAt] = useState(null);
+  // Clean by default: an objection opens to its three steps, a practised example on a click.
+  const [openObj, setOpenObj] = useState({});
+  const [exAt, setExAt] = useState(null);
   const dirty = Object.keys(edits).length > 0 || Object.values(added).some((a) => a.length);
   const clean = (t) => (t || '').replace(/^"|"$/g, '');
   const save = (key, v, byShark) => setScript({ edits: { ...edits, [key]: v.trim() }, shark: { ...sharked, [key]: !!byShark } });
@@ -454,7 +458,8 @@ export function CallScript({ state, setScript, notify, onSheet }) {
                     <span class="min-w-0 flex-1">
                       ${edited ? editedTag(key) : mine && html`<span class="mb-0.5 flex items-center gap-1 text-[12px] font-bold text-brand-600"><${Icon} name="pencil" size=${11} />מהתרגול שלך</span>`}
                       <${InlineEdit} multiline value=${value} onSave=${(v) => save(key, v)} />
-                      ${ex && !edited && html`<span class="mt-1.5 block border-t border-line pt-1.5 text-[13px] text-muted"><b class="text-brand-600">איך זה נשמע אצלך בתרגול:</b> "${clean(ex)}"</span>`}
+                      ${ex && !edited && html`<button type="button" aria-expanded=${exAt === key} class="mt-1 inline-flex items-center gap-1 text-[12px] font-bold text-brand-600 cursor-pointer" onClick=${() => setExAt(exAt === key ? null : key)}><${Icon} name=${exAt === key ? 'chevron-up' : 'chevron-down'} size=${12} />איך זה נשמע אצלך בתרגול</button>`}
+                      ${ex && !edited && exAt === key && html`<span class="rise mt-1 block text-[13px] text-muted">"${clean(ex)}"</span>`}
                     </span>
                     <${SharkBtn} on=${sharkAt === key} onClick=${() => toggleShark(key)} />
                   </div>
@@ -481,13 +486,15 @@ export function CallScript({ state, setScript, notify, onSheet }) {
     </ol>
 
     <h2 class="mb-1 flex items-center gap-2 text-[16px] font-bold"><${Icon} name="shield-question" size=${18} class="text-brand-600" />התנגדויות נפוצות, ומה עונים</h2>
-    <p class="mb-3 text-[14px] text-muted">שלושה צעדים לכל התנגדות: שואלים מה באמת מדאיג, עונים על הדאגה עם ההצעה, ובודקים שזה נפתר לפני שמבקשים שוב. לא מתווכחים, לא לוחצים, ולא מורידים מחיר.</p>
-    <div class="mb-3 grid gap-3 md:grid-cols-2">
+    <p class="mb-3 text-[14px] text-muted">שואלים, עונים, סוגרים. לא מתווכחים ולא מורידים מחיר.</p>
+    <div class="mb-3 grid items-start gap-3 md:grid-cols-2">
       ${objections.map((r) => {
         const f = FORMS.find((x) => x.id === r.form);
         return html`<article key=${r.id} class=${cx('fb-panel flex flex-col !p-4', r.mine && 'ring-2 ring-brand-300')}>
           <p class="mb-1 flex items-center gap-1.5 text-[12px] font-bold text-muted"><${Icon} name=${f.icon} size=${13} class="text-brand-600" />${f.label}${r.mine && html`<span class="ms-auto"><${Tag} tone="blue">ענית בתרגול<//></span>`}</p>
           <p class="text-[17px] font-bold">"${r.said}"</p>
+          <button type="button" aria-expanded=${!!openObj[r.id]} class="mt-1.5 inline-flex items-center gap-1 self-start text-[14px] font-bold text-brand-600 cursor-pointer" onClick=${() => setOpenObj({ ...openObj, [r.id]: !openObj[r.id] })}><${Icon} name=${openObj[r.id] ? 'chevron-up' : 'chevron-down'} size=${15} />${openObj[r.id] ? 'לסגור' : 'מה עונים'}</button>
+          ${openObj[r.id] && html`<div class="rise mt-3">
           <p class="mb-3 text-[13px] text-muted">מה באמת מדאיג: ${r.worry}</p>
           <ol class="flex flex-col gap-2">
             ${STEPS.map(([k, label, sub], n) => {
@@ -506,6 +513,7 @@ export function CallScript({ state, setScript, notify, onSheet }) {
           </ol>
           ${r.honest && html`<p class="mt-3 flex items-start gap-1.5 rounded-xl bg-warn-50 px-3 py-2 text-[13px] text-ink"><${Icon} name="scale" size=${14} class="mt-0.5 shrink-0 text-warn" /><span>${r.honest}</span></p>`}
           ${r.mine && html`<p class="mt-2 rounded-xl bg-brand-50 px-3 py-2 text-[13px]"><b class="block text-brand-600">איך ענית בתרגול</b>${r.answer}</p>`}
+          </div>`}
         </article>`;
       })}
     </div>

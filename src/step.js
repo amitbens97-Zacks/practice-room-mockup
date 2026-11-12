@@ -162,7 +162,6 @@ export function Room({ state, onPick, onAdd, onBuild, onMore, onResume, onTool, 
           </span>
           <span class="block px-4">
             <span class="block rounded-2xl rounded-ss-sm bg-canvas px-3 py-2 text-[15px] text-ink">"${c.said}"</span>
-            <small class="mt-2 flex items-start gap-1.5 text-[13px] text-muted"><${Icon} name="corner-down-left" size=${13} class="mt-0.5 shrink-0" />${c.from}</small>
           </span>
           ${last && html`<small class="mx-4 mt-3 flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-[13px] font-semibold text-brand-600"><${Icon} name=${OUTCOME[last.outcome]?.icon || 'message-circle'} size=${13} />בפעם האחרונה: ${outcomeLabel(last.outcome, c)} · ${last.feedback.avg.toFixed(1)}</small>`}
           <span class="mt-auto block pt-3"><span class="flex items-center gap-2 border-t border-line px-4 py-3">
