@@ -265,7 +265,7 @@ export function FilledBy({ onUndo }) {
 const POS_KEY = 'flowbiz-pr-partner-pos';
 const HIT = 'button, a, input, textarea, select, [role="button"], [role="tab"], [role="checkbox"], .fb-btn, .fb-chip, .fb-tile, .fb-field, .fb-note, .fb-panel';
 
-export function PartnerBubble({ message, unread, onRead, action, mood = 'calm' }) {
+export function PartnerBubble({ message, unread, onRead, action, mood = 'calm', openKey = 0, body, onClose }) {
   const el = useRef();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(() => {
@@ -289,6 +289,21 @@ export function PartnerBubble({ message, unread, onRead, action, mood = 'calm' }
   };
 
   useEffect(() => setOpen(false), [message]);
+  // "הסבר מהכריש" in the top bar opens the note from outside.
+  useEffect(() => {
+    if (!openKey) return;
+    const b = box()?.getBoundingClientRect();
+    const r = el.current?.getBoundingClientRect();
+    if (b && r) setSide({ x: r.left + r.width / 2 > b.left + b.width / 2 ? 'right' : 'left', y: r.top - b.top < 320 ? 'down' : 'up' });
+    setOpen(true);
+    onRead();
+  }, [openKey]);
+  // A note opened only for the explanation can leave the screen once it closes.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !open) onClose?.();
+    wasOpen.current = open;
+  }, [open]);
   // Once the partner's suggestion went in, the note has done its job.
   const hadAction = useRef(!!action);
   useEffect(() => {
@@ -365,12 +380,12 @@ export function PartnerBubble({ message, unread, onRead, action, mood = 'calm' }
     <span class="fb-shark-face"><${SharkAvatar} size=${68} mood=${mood} /></span>
     ${open &&
     html`<div
-      class=${cx('absolute w-[min(340px,80vw)] cursor-auto', side.y === 'up' ? 'bottom-[calc(100%+16px)]' : 'top-[calc(100%+16px)]', side.x === 'right' ? 'right-0' : 'left-0')}
+      class=${cx('absolute cursor-auto', body ? 'w-[min(380px,86vw)]' : 'w-[min(340px,80vw)]', side.y === 'up' ? 'bottom-[calc(100%+16px)]' : 'top-[calc(100%+16px)]', side.x === 'right' ? 'right-0' : 'left-0')}
       onPointerDown=${(e) => e.stopPropagation()}
       onPointerUp=${(e) => e.stopPropagation()}
     >
       <${PartnerNote} title=${PARTNER.role} action=${action} mood=${mood}>
-        <${Typed} key=${message} id=${message} text=${message} />
+        ${body || html`<${Typed} key=${message} id=${message} text=${message} />`}
       <//>
     </div>`}
   </div>`;

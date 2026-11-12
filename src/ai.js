@@ -387,6 +387,19 @@ const MODE_ASK = {
   soft: 'יותר רך: פחות לחץ ופחות "מכירה", בלי לוותר על השאלה או על הבקשה.',
 };
 
+// "לשאול את הכריש" (from "הסבר מהכריש"): a short answer about the screen the user is on, with the chat so far.
+export async function chat(screenTitle, history) {
+  const talk = history.map((m) => `${m.me ? 'המתאמן' : 'הכריש'}: ${m.text}`).join('\n');
+  const system = [
+    'מצב פעיל: שאלה על השלב "חדר התרגול". אתה הכריש, השותף העסקי של המתאמן. אל תשחק לקוח ואל תציג את התפריט.',
+    trainee(),
+    `המתאמן נמצא במסך "${screenTitle}". ענה כמו שותף עסקי: קצר (2-4 משפטים), בעברית פשוטה, על המסך, על השלב ועל העסק שלו לפי בלוק ההקשר. בלי מקפים ארוכים.`,
+  ].join('\n\n');
+  const out = await ask({ system, messages: [{ role: 'user', content: talk }], schema: CHAT_SCHEMA, effort: 'low', maxTokens: 2000 });
+  return out.reply;
+}
+const CHAT_SCHEMA = { type: 'object', properties: { reply: { type: 'string' } }, required: ['reply'], additionalProperties: false };
+
 // text: the line now. where: the part of the call or the objection it belongs to.
 // mode: short | natural | soft | custom (then ask is what the user wrote to the shark).
 export async function sharkLine({ text, where, mode, ask: wish }) {

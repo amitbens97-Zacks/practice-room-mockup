@@ -7,8 +7,10 @@
 // feedback are written in advance, to show a full feedback.
 // Link params: ?screen=opening|room|brief|call|sample|stage|drill|analysis|sheet|done,
 // ?user=f, ?embed = phone layout. Shift+D opens the developer notes.
+// "הסבר מהכריש" in the top bar, on every screen, opens the shark's note: a short explanation and a chat (src/explain.js).
 import { html, render, useState, useEffect, useRef, Icon } from './lib.js';
 import { PartnerBubble, Progress, TopBar, BottomBar, Status, PrimaryButton, Button, Toast } from './components.js';
+import { EXPLAIN, ExplainButton, SharkTalk } from './explain.js';
 import { STEP, PARTS, CLIENTS, FORMS, SHEET, SHEET_FROM_SAMPLE, SAMPLE_CALL, SAMPLE_FEEDBACK, STAGE_DRILL, clientFromDescription, registerClient, g } from './data.js';
 import { newCall, userSays, hintFor, feedbackFor, talkRatio } from './coach.js';
 import * as ai from './ai.js';
@@ -77,6 +79,7 @@ function App({ view: shellView, onViewChange }) {
   const [toast, setToast] = useState(null);
   const [dev, setDev] = useState(false);
   const [unread, setUnread] = useState(true);
+  const [explain, setExplain] = useState({ screen: null, n: 0 }); // "הסבר מהכריש" opens the shark's note on this screen
   const [busy, setBusy] = useState(null); // 'hint' | 'feedback' while the model works
   const [prepFor, setPrepFor] = useState(null); // a real client's id: the prep card is open
   const timers = useRef({});
@@ -112,6 +115,12 @@ function App({ view: shellView, onViewChange }) {
     };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
+  }, []);
+  const screenRef = useRef(null);
+  useEffect(() => {
+    const open = () => setExplain((x) => ({ screen: screenRef.current, n: x.n + 1 }));
+    window.addEventListener('fb:explain', open);
+    return () => window.removeEventListener('fb:explain', open);
   }, []);
 
   const notify = (text, icon = 'info') => {
@@ -296,6 +305,7 @@ function App({ view: shellView, onViewChange }) {
 
   // ---------- the frame of the step ----------
   const screen = route.screen === 'call' && !call ? 'room' : route.screen === 'feedback' && !call?.feedback ? 'room' : route.screen;
+  screenRef.current = screen;
   const part = PART_OF[screen];
   const devBtn = html`<button type="button" onClick=${() => setDev((d) => !d)} title="הערות למפתחים (Shift+D)" aria-label="הערות למפתחים" class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted hover:bg-brand-50 hover:text-brand-600 cursor-pointer max-md:hidden"><${Icon} name="code-xml" size=${18} /></button>`;
   const goHome = () => notify('במוק-אפ דף הבית לא פעיל. השלב נשאר פתוח במפה', 'house');
@@ -303,7 +313,7 @@ function App({ view: shellView, onViewChange }) {
   const top = html`<${TopBar}
     step=${STEP}
     progress=${part == null ? null : html`<${Progress} parts=${PARTS} current=${part} maxReached=${hasFeedback ? 3 : part} done=${screen === 'done'} onJump=${(i) => ((i === 1 && !call) || (i === 2 && !call?.feedback) ? notify('בוחרים לקוח ומתחילים שיחה מהחדר', 'info') : toPart(i))} />`}
-    tools=${html`${!EMBED && html`<${ViewToggle} view=${shellView} onChange=${onViewChange} class="max-md:hidden" />`}${devBtn}`}
+    tools=${html`${!EMBED && html`<${ViewToggle} view=${shellView} onChange=${onViewChange} class="max-md:hidden" />`}${devBtn}${EXPLAIN[screen] && html`<${ExplainButton} />`}`}
     onHome=${goHome}
   />`;
 
@@ -365,11 +375,12 @@ function App({ view: shellView, onViewChange }) {
   }[screen];
 
   const isCall = screen === 'call';
+  const explainHere = explain.screen === screen && !!EXPLAIN[screen];
   return html`<div class="fb-notebook flex h-dvh flex-col text-ink" dir="rtl">
     ${top}
     <main class=${isCall ? 'relative min-h-0 flex-1 overflow-hidden' : 'thin-scroll relative min-h-0 flex-1 overflow-y-auto'}>
       ${body}
-      ${SHARK_LINE[screen] && html`<${PartnerBubble} key=${screen} message=${SHARK_LINE[screen]} unread=${unread} onRead=${() => setUnread(false)} />`}
+      ${(SHARK_LINE[screen] || explainHere) && html`<${PartnerBubble} key=${screen} message=${SHARK_LINE[screen] || ''} unread=${unread} onRead=${() => setUnread(false)} openKey=${explainHere ? explain.n : 0} body=${explainHere && html`<${SharkTalk} screen=${screen} />`} onClose=${SHARK_LINE[screen] ? null : () => setExplain((x) => ({ ...x, screen: null }))} />`}
     </main>
     ${bottom}
     <${Toast} toast=${toast} />
